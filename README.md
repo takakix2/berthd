@@ -2,7 +2,8 @@
 
 `berthd` は **PTY を所有する小さなデーモン**です。シェルの寿命を端末アプリから切り離すので、
 **アプリを閉じてもシェルは動き続け、あとで同じセッションへ scrollback ごと戻れます**。
-tmux と同じ種類の道具ですが、**画面の描画はしません**（端末エミュレーションはクライアントの仕事です）。
+セッションの永続化をするという意味では tmux と同じですが、ヘッドレスです。画面の描画はしません。
+端末エミュレーションはクライアントが行いますので、好きな端末を使ってください。
 
 同梱の **`berth`** がセッションを操作する CLI です。どのシェルからでも使えます。
 
@@ -20,10 +21,9 @@ curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/instal
 
 installer は次のことをします。
 
-- 最新の release を落とし、`SHA256SUMS` で検算する（検算できない環境では入れません）
-- `berthd` と `berth` を**必ず 2 本一緒に** `~/.local/bin` へ置く（`BERTHD_INSTALL_DIR` で変更できます）
-- 入れる前に、動いている古いデーモンを畳む（**セッションが残っていれば止まって知らせます**）
-- 旧名の `argod` / `argo` を消す
+- 最新の release を落とし、`SHA256SUMS` で検算する
+- `berthd` と `berth` を `~/.local/bin` に入れる（`BERTHD_INSTALL_DIR` で変更できます）
+- 入れる前に、動いている古いデーモンを畳む
 
 手で入れる場合:
 
@@ -73,10 +73,10 @@ session id が入っているので、`berth ls` の `*` や、引数 1 つの `
 | `BERTHD_SOCKET` | ソケットの場所（既定は `$XDG_RUNTIME_DIR/berthd.sock`、無ければ `~/.berth/berthd.sock`）。**明示すると `berth attach` は自動起動しません**（転送したソケットなど、別の接続先を指している可能性があるため） |
 | `BERTHD_NO_SPAWN` | 立てると `berth attach` の自動起動を止める。常駐させている環境で二重起動を防ぐ |
 | `BERTHD_BIN` | 自動起動する berthd の場所（既定は `berth` の隣、次に `PATH`） |
-| `BERTHD_JOURNAL_PATH` | 監査台帳の場所（既定 `~/.berth/journal.jsonl`） |
+| `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`） |
 | `BERTHD_SESSION` | **berthd が子プロセスに渡す**自分の session id（上記） |
 
-## 監査台帳
+## Journal
 
 berthd は attach の**開始と終了**を `~/.berth/journal.jsonl` に NDJSON（Flux v1 レコード）で残します。
 1 行に**観測した事実と、クライアントの自己申告**の両方が載ります。
@@ -93,13 +93,13 @@ berthd は attach の**開始と終了**を `~/.berth/journal.jsonl` に NDJSON�
 
 berthd はシェルの中で打たれたコマンドを記録しません（流れるバイト列を解釈しない設計です）。
 コマンドの記録はシェル側の仕事で、シェルが `BERTHD_SESSION` を自分の記録に残せば
-（例: hsh の `session:start`）、2 つの台帳を session id で突き合わせられます。
+（例: hsh の `session:start`）、berthd の journal とシェル側の記録を session id で突き合わせられます。
 session id が示すのは「そのセッションの子孫である」ことなので、時刻は attach レコードの
 開始・終了で絞ってください。
 
 ### 権限
 
-ソケットは `0600`、`~/.berth` は `0700`、台帳は `0600` で berthd 自身が作ります（起動元の umask に
+ソケットは `0600`、`~/.berth` は `0700`、journal は `0600` で berthd 自身が作ります（起動元の umask に
 依存しません）。macOS には `XDG_RUNTIME_DIR` が無く、ソケットは `~/.berth` に置かれるため、
 この締め付けがそのまま防御になります。
 
@@ -118,7 +118,7 @@ berth attach build     # 新
 - installer は旧名のバイナリを消します。常駐させていた場合は unit / plist も入れ替えてください
   （[dist/README.md](dist/README.md)）。
 - 環境変数は `ARGOD_*` → `BERTHD_*` です。
-- 監査台帳が `~/.argo/journal.jsonl` に残っていれば、手で `~/.berth/journal.jsonl` へ移してください。
+- journal が `~/.argo/journal.jsonl` に残っていれば、手で `~/.berth/journal.jsonl` へ移してください。
 - `~/.argo/config.toml` は berthd の物ではないので、そのままで構いません。
 
 ## ライセンス
