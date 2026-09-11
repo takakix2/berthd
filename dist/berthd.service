@@ -1,0 +1,31 @@
+# berthd — systemd **user** service（per-user daemon that owns your shells）。
+#
+# インストール（先に berthd と berth を ~/.local/bin に置く・下の ExecStart に合わせる）:
+#   mkdir -p ~/.config/systemd/user
+#   cp dist/berthd.service ~/.config/systemd/user/
+#   loginctl enable-linger "$USER"        # ← ログアウト後も生かす（remote attach の要）
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now berthd
+#
+# 動作確認:  berth info   /   berth ls
+# 畳む:      systemctl --user stop berthd   （service 管理下では `berth kill-server` でなくこちら）
+#
+# 注意: linger を有効にしないと、あなたの最後のログインセッションが切れた時に user manager ごと
+# berthd が止まる＝「いつでも attach」が成立しない。remote 受け皿にするなら enable-linger は必須。
+
+[Unit]
+Description=berthd — persistent shell session daemon (owns PTYs)
+Documentation=https://github.com/takakix2/berthd
+After=default.target
+
+[Service]
+Type=simple
+# %h = home。berthd を別の場所に置くなら絶対パスで書き換える（systemd は PATH を当てにしない）。
+ExecStart=%h/.local/bin/berthd
+# berthd は自分からは落ちない設計。異常終了時だけ立て直す（`berth kill-server` は exit 0 ＝再起動しない）。
+Restart=on-failure
+RestartSec=2
+# socket は $XDG_RUNTIME_DIR/berthd.sock（user service では systemd が設定する /run/user/UID/）に張られる。
+
+[Install]
+WantedBy=default.target

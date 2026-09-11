@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  berthd — launchd LaunchAgent (macOS, per-user)。
+
+  インストール（先に berthd と berth を ~/.local/bin に置く）:
+    # ProgramArguments のパスを自分の $HOME に書き換える（下の /Users/CHANGEME）。
+    cp dist/com.berth.berthd.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.berth.berthd.plist
+
+  動作確認:  berth info  /  berth ls
+  畳む:      launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist
+
+  KeepAlive は SuccessfulExit=false ＝ `berth kill-server`（exit 0）では復活させず、
+  クラッシュ（非 0）でだけ立て直す（systemd の Restart=on-failure と同じ意味）。
+  macOS は XDG_RUNTIME_DIR が無いので socket は ~/.berth/berthd.sock に張られる。
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.berth.berthd</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/CHANGEME/.local/bin/berthd</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/tmp/berthd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/berthd.log</string>
+</dict>
+</plist>
