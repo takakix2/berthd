@@ -48,7 +48,8 @@ berth attach work     # 同じシェルに戻る
 | コマンド | |
 |---|---|
 | `berth attach [<name>]`（`a`） | このターミナルでセッションに入る（無ければ作る） |
-| `berth detach [<name>]`（`d`） | セッションから抜ける（省略時は今いるセッション） |
+| `berth attach -r <name>` | **見るだけ**で入る（打鍵も画面の大きさも送らない。`q` か Ctrl-C で抜ける） |
+| `berth detach [<name>]`（`d`） | セッションから抜ける（省略時は今いるセッション。見ている端末も含めて全員が抜ける） |
 | `berth ls` | 一覧（`*` が今いるセッション） |
 | `berth rename [<session>] <name>`（`r`） | 名前を付け直す（省略時は今いるセッション） |
 | `berth kill <session>` | セッションを閉じる（中のシェルごと） |
@@ -58,6 +59,16 @@ berth attach work     # 同じシェルに戻る
 
 `<name>` には名前（`main` など）か id を渡せます。セッションの中では `BERTHD_SESSION` に自分の
 session id が入っているので、`berth ls` の `*` や、引数 1 つの `berth rename <name>` が効きます。
+
+### 複数の端末から同じセッションに入る
+
+- **打てるのは常に 1 台です。** 別の端末から `berth attach` で同じセッションに入ると、前の端末は
+  `[detached from …]` と表示して抜けます（シェルはそのまま動き続けます）。前の端末の打鍵が
+  混ざることはありません。
+- **見るだけなら何台でも入れます**（`berth attach -r`）。見る側は画面の大きさを変えません。
+- 見る側が出力に追いつけないときは、**その見る側だけ**が外れます（打っている側は止まりません）。
+- `-r` は berthd 0.3.0 以降が必要です。古い berthd に対しては `berth` が断ります
+  （`berth kill-server` で入れ替えてください）。
 
 ### デーモンの寿命
 
@@ -75,21 +86,34 @@ session id が入っているので、`berth ls` の `*` や、引数 1 つの `
 | `BERTHD_BIN` | 自動起動する berthd の場所（既定は `berth` の隣、次に `PATH`） |
 | `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`） |
 | `BERTHD_SESSION` | **berthd が子プロセスに渡す**自分の session id（上記） |
+| `AUDIT_ACTOR` | `berth` が attach のときに名乗る名前（journal の `claimed_actor`）。管理者が付ける想定です |
 
 ## Journal
 
 berthd は attach の**開始と終了**を `~/.berth/journal.jsonl` に NDJSON（Flux v1 レコード）で残します。
-1 行に**観測した事実と、クライアントの自己申告**の両方が載ります。
+1 行に**観測した事実と、クライアントの自己申告**の両方が載ります。設定は要りません。
 
 | 欄 | 何か | 出所 |
 |---|---|---|
 | `peer_uid` / `peer_pid` | 接続してきたプロセス | カーネルが観測した値 |
+| `peer_auid` | ログインしたときのユーザーの監査 uid（`su` や `sudo` をまたいでも変わらない） | カーネルが観測した値（Linux / macOS） |
+| `peer_ancestry` / `peer_ancestry_src` | attach した瞬間の、接続してきたプロセスの親の並び（最大 8 段）と、どこまで読めたか | カーネルが観測した値 |
 | `claimed_actor` / `claimed_actor_src` | クライアントが名乗った名前と、その出所 | クライアントの自己申告（検証しません） |
+| `read_only` | 見るだけの接続か | berthd |
+| `how`（終了の行） | `exited`（シェルが終了した）／ `detached`（外された。別の端末が入って置き換えられた場合も含む）／ `closed`（自分で抜けた・接続が閉じた）／ `too_slow`（見る側が出力に追いつけず外された） | berthd |
 
 観測だけでは足りないのは、**人も AI エージェントも同じユーザーの uid で動く**からです。
 自己申告だけでも足りません（誰でも名乗れます）。並べておけば、一致していれば問題なし、
 食い違っていれば調べる、が 1 行で読めます。名乗らなかった attach の欄は空のままにします
 （「誰も名乗らなかった」も事実なので、OS のユーザー名で埋めません）。
+
+`berth` の名乗りは環境変数から次の順で拾います（空の値は名乗りとして扱いません）。
+
+1. `AUDIT_ACTOR`（`claimed_actor_src` は `audit_actor`）
+2. `HSH_ACTOR`（`hsh_actor`）
+3. AI エージェントの実行環境が置く印 —— `AI_AGENT`、`CLAUDE_CODE_ENTRYPOINT`（`agent`）
+
+親の並びは `sshd` などで止めずに辿るので、ssh 越しの attach でも「何から起動されたか」が残ります。
 
 berthd はシェルの中で打たれたコマンドを記録しません（流れるバイト列を解釈しない設計です）。
 コマンドの記録はシェル側の仕事で、シェルが `BERTHD_SESSION` を自分の記録に残せば

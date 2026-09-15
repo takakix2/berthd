@@ -13,7 +13,7 @@ Their license texts are reproduced here, as those licenses require.
 > 
 > This is not the license of berthd itself. See `LICENSE` for hsh's own distribution terms.
 
-Crates covered: **43** (license text bundled: 42 / no license file in the crate: 1)
+Crates covered: **41** (license text bundled: 41 / no license file in the crate: 0)
 
 Crates that ship the same license text are grouped together. Within a group the text
 is byte-identical apart from the copyright line, so **every crate's copyright notice**
@@ -839,33 +839,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## 9. Copyright (c) 2026 Takayuki Nine — 1 crate(s)
-
-Declared SPDX: `ISC`
-
-Crates, with the copyright notice each one ships:
-
-- berthd 0.2.0 — Copyright (c) 2026 Takayuki Nine
-
-Full text as shipped by `berthd 0.2.0` (byte-identical for every crate above, apart from the copyright line):
-
-```
-Copyright (c) 2026 Takayuki Nine
-
-Permission to use, copy, modify, and distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-```
-
-## 10. Apache License 2.0 — 1 crate(s)
+## 9. Apache License 2.0 — 1 crate(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
@@ -1117,7 +1091,7 @@ limitations under the License.
 ~~~~
 ```
 
-## 11. Apache License 2.0 — 1 crate(s)
+## 10. Apache License 2.0 — 1 crate(s)
 
 Declared SPDX: `MIT/Apache-2.0`
 
@@ -1331,7 +1305,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 12. Apache License 2.0 — 1 crate(s)
+## 11. Apache License 2.0 — 1 crate(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
@@ -1545,7 +1519,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 13. This project is dual-licensed under the Unlicense and MIT li — 1 crate(s)
+## 12. This project is dual-licensed under the Unlicense and MIT li — 1 crate(s)
 
 Declared SPDX: `Unlicense OR MIT`
 
@@ -1561,7 +1535,7 @@ This project is dual-licensed under the Unlicense and MIT licenses.
 You may use this code under the terms of either license.
 ```
 
-## 14. The Unlicense (public domain) — 1 crate(s)
+## 13. The Unlicense (public domain) — 1 crate(s)
 
 Declared SPDX: `Unlicense OR MIT`
 
@@ -1598,7 +1572,7 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 ```
 
-## 15. MIT License — 1 crate(s)
+## 14. MIT License — 1 crate(s)
 
 Declared SPDX: `MIT`
 
@@ -1630,7 +1604,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## 16. Mozilla Public License 2.0 — 1 crate(s)
+## 15. Mozilla Public License 2.0 — 1 crate(s)
 
 Declared SPDX: `MPL-2.0`
 
@@ -2016,7 +1990,7 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
   defined by the Mozilla Public License, v. 2.0.
 ```
 
-## 17. Apache License 2.0 — 1 crate(s)
+## 16. Apache License 2.0 — 1 crate(s)
 
 Declared SPDX: `Apache-2.0 OR MIT`
 
@@ -2205,7 +2179,7 @@ Apache License
    END OF TERMS AND CONDITIONS
 ```
 
-## 18. Apache License 2.0 — 1 crate(s)
+## 17. Apache License 2.0 — 1 crate(s)
 
 Declared SPDX: `BSD-2-Clause OR Apache-2.0`
 
@@ -2231,7 +2205,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 19. BSD 2-Clause — 1 crate(s)
+## 18. BSD 2-Clause — 1 crate(s)
 
 Declared SPDX: `BSD-2-Clause OR Apache-2.0`
 
@@ -2268,7 +2242,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## 20. Apache License 2.0 — 1 crate(s)
+## 19. Apache License 2.0 — 1 crate(s)
 
 Declared SPDX: `MIT/Apache-2.0`
 
@@ -2482,7 +2456,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 21. MIT License — 1 crate(s)
+## 20. MIT License — 1 crate(s)
 
 Declared SPDX: `(MIT OR Apache-2.0) AND Unicode-3.0`
 
@@ -2533,16 +2507,4 @@ not be used in advertising or otherwise to promote the sale, use or other
 dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 ```
-
----
-
-## Crates that ship no license file
-
-These declare an SPDX identifier in `Cargo.toml` but include no license file in the
-published package. They are listed rather than dropped — a missing notice should be
-visible as missing.
-
-| crate | version | SPDX | repository |
-|---|---|---|---|
-| `argo-protocol` | 0.1.0-dev | MIT OR Apache-2.0 |  |
 
