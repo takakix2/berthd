@@ -5,6 +5,12 @@
 セッションの永続化をするという意味では tmux と同じですが、ヘッドレスです。画面の描画はしません。
 端末エミュレーションはクライアントが行いますので、好きな端末を使ってください。
 
+**画面を持たないのは設計です。** 分割やタブ（多重化）は端末アプリの仕事で、berthd はやりません。
+代わりに**セッションはいくつでも作れます** —— ペインを 2 つ開いて、それぞれで `berth attach a` /
+`berth attach b` と打てば、どちらもその端末を閉じたあとも生き続けます。
+画面を持たないので、**どの端末のどのペインの中にでも入れます**（tmux のペイン、端末アプリの
+タブや分割、ssh の向こう）。
+
 同梱の **`berth`** がセッションを操作する CLI です。どのシェルからでも使えます。
 
 ```
@@ -13,19 +19,19 @@ $ berth ls
   build   zsh   120x40  ~/src/lib
 ```
 
-## 入れる
+## インストール
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
 ```
 
-installer は次のことをします。
+インストーラーは次のことをします。
 
-- 最新の release を落とし、`SHA256SUMS` で検算する
-- `berthd` と `berth` を `~/.local/bin` に入れる（`BERTHD_INSTALL_DIR` で変更できます）
-- 入れる前に、動いている古いデーモンを畳む
+- 最新のリリースをダウンロードし、`SHA256SUMS` で検算する
+- `berthd` と `berth` を `~/.local/bin` にインストールする（`BERTHD_INSTALL_DIR` で変更できます）
+- インストールの前に**`berth kill-server`** でデーモンを停止してください。セッションが残っている場合はインストールを中断します。
 
-手で入れる場合:
+手動でインストールする場合:
 
 ```sh
 curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz
@@ -34,84 +40,128 @@ cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 
 - 配布しているのは **Linux x86_64** と **macOS arm64**（`berthd-macos-arm64.tar.gz`）です。
 - 展開先はディレクトリです（カレントに `berthd` は出来ません）。
-- **片方だけ入れないでください** —— プロトコルが食い違ったまま動きます。
+- **`berth` と `berthd` の版が違うと動かない場合があります。** うまく動かないときは `berth info` で両方の版を確かめてください。
 
-## 使う
+## 使い方
 
 ```sh
-berth attach work     # セッション work に入る（無ければ作る。berthd も必要なら自動で起動）
+berth attach work     # セッション work に入る（無ければ作る。berthd も居なければ起こす）
 # … 作業 …
 berth d               # セッションから抜ける（シェルは berthd の下で動き続ける）
 berth attach work     # 同じシェルに戻る
 ```
 
-| コマンド | |
-|---|---|
-| `berth attach [<name>]`（`a`） | このターミナルでセッションに入る（無ければ作る） |
-| `berth attach -r <name>` | **見るだけ**で入る（打鍵も画面の大きさも送らない。`q` か Ctrl-C で抜ける） |
-| `berth detach [<name>]`（`d`） | セッションから抜ける（省略時は今いるセッション。見ている端末も含めて全員が抜ける） |
-| `berth ls` | 一覧（`*` が今いるセッション） |
-| `berth rename [<session>] <name>`（`r`） | 名前を付け直す（省略時は今いるセッション） |
-| `berth kill <session>` | セッションを閉じる（中のシェルごと） |
-| `berth info` | 接続先の berthd（ホストと版）を表示 |
-| `berth kill-server [-f]` | berthd を畳む（セッションが残っていれば `-f` が要る） |
-| `berth --version` / `berthd --version` | 版を表示（デーモンには接続しません） |
+| コマンド                                 |                                                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `berth attach [<name>]`（`a`）           | このターミナルでセッションに入る（無ければ作る）                                            |
+| `berth attach -r <name>`                 | **見るだけ**で入る（打鍵も画面の大きさも送らない。`q` か Ctrl-C で抜ける）                  |
+| `berth detach [<name>]`（`d`）           | セッションから抜ける（省略時は今いるセッション。見ている端末も含めて全員が抜ける）          |
+| `berth ls`                               | 一覧（`*` が今いるセッション）                                                              |
+| `berth rename [<session>] <name>`（`r`） | 名前を付け直す（省略時は今いるセッション）                                                  |
+| `berth kill <session>`                   | セッションを閉じる（中のシェルごと）                                                        |
+| `berth info`                             | 接続先の berthd（ホストと版）と、**この端末で新しいセッションを作ったら起きるシェル**を表示 |
+| `berth kill-server [-f]`                 | berthd を停止する（セッションが残っていれば `-f` が要る）                                   |
+| `berth --version` / `berthd --version`   | 版を表示（デーモンには接続しません）                                                        |
 
 `<name>` には名前（`main` など）か id を渡せます。セッションの中では `BERTHD_SESSION` に自分の
 session id が入っているので、`berth ls` の `*` や、引数 1 つの `berth rename <name>` が効きます。
 
 ### 複数の端末から同じセッションに入る
 
-- **打てるのは常に 1 台です。** 別の端末から `berth attach` で同じセッションに入ると、前の端末は
+- **キーを打てるのは常に 1 台です。** 別の端末から `berth attach` で同じセッションに入ると、前の端末は
   `[detached from …]` と表示して抜けます（シェルはそのまま動き続けます）。前の端末の打鍵が
   混ざることはありません。
-- **見るだけなら何台でも入れます**（`berth attach -r`）。見る側は画面の大きさを変えません。
+- **read-only のオプションがあります**（`berth attach -r`）。見るだけなら何台でも入れます。
+  read-only では画面の大きさを変えません。画面の大きさはキーを打っている端末が決めるので、read-onlyの端末の画面が
+  それより小さいと、全画面のアプリ（`vim` や `htop`）の表示では画面の表示が崩れます。
 - 見る側が出力に追いつけないときは、**その見る側だけ**が外れます（打っている側は止まりません）。
 - `-r` は berthd 0.3.0 以降が必要です。古い berthd に対しては `berth` が断ります
   （`berth kill-server` で入れ替えてください）。
 
 ### デーモンの寿命
 
-- berthd が居なければ `berth attach` が起動します。`ls` / `info` は起動しません（見るためだけに立てない）。
-- berthd は**自分からは終了しません**（アイドルタイムアウトはありません）。畳むのは `berth kill-server` です。
-- 他のマシンから ssh で入って attach する使い方では、berthd を常駐させておきます。
-  systemd / launchd の設定は [dist/README.md](dist/README.md) にあります。
+- berthd は**自分からは終了しません**（アイドルタイムアウトはありません）。停止させるのは `berth kill-server` です。
+- berthd を**常駐させたい**ときは、systemd / launchd の設定が [dist/README.md](dist/README.md) にあります。
 
 ### 環境変数
 
-| 変数 | 効果 |
-|---|---|
-| `BERTHD_SOCKET` | ソケットの場所（既定は `$XDG_RUNTIME_DIR/berthd.sock`、無ければ `~/.berth/berthd.sock`）。**明示すると `berth attach` は自動起動しません**（転送したソケットなど、別の接続先を指している可能性があるため） |
-| `BERTHD_NO_SPAWN` | 立てると `berth attach` の自動起動を止める。常駐させている環境で二重起動を防ぐ |
-| `BERTHD_BIN` | 自動起動する berthd の場所（既定は `berth` の隣、次に `PATH`） |
-| `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`） |
-| `BERTHD_SESSION` | **berthd が子プロセスに渡す**自分の session id（上記） |
-| `AUDIT_ACTOR` | `berth` が attach のときに名乗る名前（journal の `claimed_actor`）。管理者が付ける想定です |
+| 変数                  | 効果                                                                                                                                                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BERTHD_SOCKET`       | ソケットの場所（既定は `$XDG_RUNTIME_DIR/berthd.sock`、無ければ `~/.berth/berthd.sock`）。**明示すると `berth attach` は berthd を起こしません**（転送したソケットなど、別の接続先を指している可能性があるため） |
+| `BERTHD_NO_SPAWN`     | 立てると `berth attach` が berthd を起こさなくなる。常駐させている環境で二重起動を防ぐ                                                                                                                           |
+| `BERTHD_BIN`          | `berth attach` が起こす berthd の場所（既定は `berth` の隣、次に `PATH`）                                                                                                                                        |
+| `BERTHD_SHELL`        | セッションで使うシェル（下記の「セッションのシェルはどう決まるか」）。`berth` を打った環境と berthd 自身の環境の**どちらでも**効きます（前者が先）                                                                                     |
+| `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`）                                                                                                                                                                  |
+| `BERTHD_SESSION`      | **berthd が子プロセスに渡す**自分の session id（上記）                                                                                                                                                           |
+| `AUDIT_ACTOR`         | `berth` が attach のときに名乗る名前（journal の `actor`）。管理者が付ける想定です                                                                                                                       |
+
+## セッションのシェルはどう決まるか
+
+`berth attach <名前>` で新しいセッションを作るとき、シェルは次の順で決まります。
+
+| 順  | 何を見るか                                                                                       | 出所の呼び名          |
+| --- | ------------------------------------------------------------------------------------------------ | --------------------- |
+| 1   | `BERTHD_SHELL`（`berth` を打った環境）                                                           | `client:berthd_shell` |
+| 2   | **そのとき走っていたシェル**（`berth` の親プロセス。`/etc/shells` に載っているシェルだけ）           | `client:parent_shell` |
+| 3   | `$SHELL`（同じく `berth` を打った環境・unix のみ）                                               | `client:env_shell`    |
+| 4   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`） | `daemon:…`            |
+
+`berth info` がこの端末の答えを表示します。同じ呼び名が journal にも `shell_src` として残ります。
+
+**2 番目が要る理由**: `bash` から `fish` と打って fish に居るとき、`$SHELL` は `/bin/bash` のままです
+（`$SHELL` は「ログインシェルに何を選んだか」の申告値で、いま走っているシェルではありません）。
+そのため、**いま使っているシェルがそのままセッションのシェルになります**。
+
+**Windows では 2 と 3 は効きません**（`/etc/shells` が無く、git-bash の `$SHELL` は
+`/bin/bash.exe` という MSYS の綴りで、Windows のプロセス起動からは解決できないため）。
+切り替えは `BERTHD_SHELL` を使ってください。
+
+**0.3.x まではデーモンの環境だけで決まっていました。** `berth` はデーモンが居なければ自分で
+起こすので、最初に起こした端末の環境がデーモンに焼き付き、以後どの端末から attach しても
+そのシェルが出ていました（tmux のペインで 1 度打つと、そのデーモンは終わるまで tmux の
+`default-shell` を配り続ける、という形で出ます）。
 
 ## Journal
 
-berthd は attach の**開始と終了**を `~/.berth/journal.jsonl` に NDJSON（Flux v1 レコード）で残します。
-1 行に**観測した事実と、クライアントの自己申告**の両方が載ります。設定は要りません。
+berthd は **セッションを起こしたこと**と **attach の開始・終了**を `~/.berth/journal.jsonl` に
+NDJSON（Flux v1 レコード）で残します。1 行に**観測した事実と、クライアントの自己申告**の両方が
+載ります。設定は要りません。
 
-| 欄 | 何か | 出所 |
-|---|---|---|
-| `peer_uid` / `peer_pid` | 接続してきたプロセス | カーネルが観測した値 |
-| `peer_auid` | ログインしたときのユーザーの監査 uid（`su` や `sudo` をまたいでも変わらない） | カーネルが観測した値（Linux / macOS） |
-| `peer_ancestry` / `peer_ancestry_src` | attach した瞬間の、接続してきたプロセスの親の並び（最大 8 段）と、どこまで読めたか | カーネルが観測した値 |
-| `claimed_actor` / `claimed_actor_src` | クライアントが名乗った名前と、その出所 | クライアントの自己申告（検証しません） |
-| `read_only` | 見るだけの接続か | berthd |
-| `how`（終了の行） | `exited`（シェルが終了した）／ `detached`（外された。別の端末が入って置き換えられた場合も含む）／ `closed`（自分で抜けた・接続が閉じた）／ `too_slow`（見る側が出力に追いつけず外された） | berthd |
+| 行                            | いつ                     | 何が読めるか                                                                      |
+| ----------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
+| `spawn:started`               | セッションを起こしたとき | どのシェルで起こしたか（`shell`）と、**それを誰が決めたか**（`shell_src`）、`cwd` |
+| `attach:start` / `attach:end` | 誰かが入った / 出たとき  | 誰が入ったか、どのくらい居たか、どう抜けたか                                      |
+
+`spawn:started` が別の行なのは、**一覧が「今」しか答えられない**からです ——
+セッションが消えると、それがどのシェルだったかはどこにも残りませんでした。
+
+| 欄                                    | 何か                                                                                                                                                                                      | 出所                                   |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `peer_uid` / `peer_pid`               | 接続してきたプロセス                                                                                                                                                                      | カーネルが観測した値                   |
+| `peer_auid`                           | ログインしたときのユーザーの監査 uid（`su` や `sudo` をまたいでも変わらない）                                                                                                             | カーネルが観測した値（Linux / macOS）  |
+| `peer_ancestry` / `peer_ancestry_src` | attach した瞬間の、接続してきたプロセスの親の並び（最大 8 段）と、どこまで読めたか                                                                                                        | カーネルが観測した値                   |
+| `actor` / `actor_src`                 | クライアントが名乗った名前と、その出所                                                                                                                                                    | クライアントの自己申告（検証しません） |
+| `shell` / `shell_src`（起こした行）   | 実際に起こした実行ファイルと、**それを誰が決めたか**（下記）                                                                                                                              | berthd                                 |
+| `read_only`                           | 見るだけの接続か                                                                                                                                                                          | berthd                                 |
+| `how`（終了の行）                     | `exited`（シェルが終了した）／ `detached`（外された。別の端末が入って置き換えられた場合も含む）／ `closed`（自分で抜けた・接続が閉じた）／ `too_slow`（見る側が出力に追いつけず外された） | berthd                                 |
 
 観測だけでは足りないのは、**人も AI エージェントも同じユーザーの uid で動く**からです。
 自己申告だけでも足りません（誰でも名乗れます）。並べておけば、一致していれば問題なし、
 食い違っていれば調べる、が 1 行で読めます。名乗らなかった attach の欄は空のままにします
 （「誰も名乗らなかった」も事実なので、OS のユーザー名で埋めません）。
 
-`berth` の名乗りは環境変数から次の順で拾います（空の値は名乗りとして扱いません）。
+`berth` の名乗りは、**`berth attach` を打った環境**の変数から拾います（空の値は名乗りとして扱いません）。
 
-1. `AUDIT_ACTOR`（`claimed_actor_src` は `audit_actor`）
-2. `HSH_ACTOR`（`hsh_actor`）
-3. AI エージェントの実行環境が置く印 —— `AI_AGENT`、`CLAUDE_CODE_ENTRYPOINT`（`agent`）
+1. **`AUDIT_ACTOR`** —— 名乗らせたいときはこれを設定します（`actor_src` は `audit_actor`）
+2. AI エージェントの実行環境が置く印 —— `AI_AGENT`、`CLAUDE_CODE_ENTRYPOINT`（`agent`）。
+   **設定しなくても付きます**
+
+設定はシェルを選びません（bash / zsh は `export AUDIT_ACTOR=…`、fish は `set -gx AUDIT_ACTOR …`。
+常駐させているなら unit の `Environment=`）。効くのは **`berth attach` を打つ環境**です ——
+セッションの中で設定しても、その attach の記録には載りません。
+
+`actor` / `actor_src` だけが**裏の取れない値**です（クライアントが名乗ったまま記録します）。
+`peer_` が付く欄はカーネルに訊いた観測値で、名乗りとは別の出所です。
 
 親の並びは `sshd` などで止めずに辿るので、ssh 越しの attach でも「何から起動されたか」が残ります。
 
@@ -139,11 +189,11 @@ argo attach build      # 旧
 berth attach build     # 新
 ```
 
-- installer は旧名のバイナリを消します。常駐させていた場合は unit / plist も入れ替えてください
+- インストーラーは旧名のバイナリを消します。常駐させていた場合は unit / plist も入れ替えてください
   （[dist/README.md](dist/README.md)）。
 - 環境変数は `ARGOD_*` → `BERTHD_*` です。
 - journal が `~/.argo/journal.jsonl` に残っていれば、手で `~/.berth/journal.jsonl` へ移してください。
-- `~/.argo/config.toml` は berthd の物ではないので、そのままで構いません。
+- `~/.argo/config.toml` は berthd の設定ではないので、そのままで構いません。
 
 ## ライセンス
 
