@@ -29,6 +29,33 @@ berth info
 
 停止は `launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist` です。
 
+## Windows（タスクスケジューラのログオントリガ）
+
+🚨 **`systemd` も `launchd` も無い面**なので、上の 2 つの unit は使えません
+（だから Windows の配布物には `dist/` を入れていません）。代わりに**タスクスケジューラ**を使います。
+
+PowerShell で（⭐ **管理者権限は要りません**）:
+
+```powershell
+$exe = "$env:USERPROFILE\.local\bin\berthd.exe"
+$a = New-ScheduledTaskAction -Execute $exe
+$t = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+# ⚠️ ExecutionTimeLimit を 0 にしないと、既定の 3 日で**勝手に止められます**（daemon なので）。
+$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+         -ExecutionTimeLimit ([TimeSpan]::Zero)
+Register-ScheduledTask -TaskName "berthd" -Action $a -Trigger $t -Settings $s -Force
+berth info                              # 動作確認
+```
+
+止めるのは `Unregister-ScheduledTask -TaskName berthd -Confirm:$false` です
+（🚫 service 管理下では `berth kill-server` を使いません。下の節を見てください）。
+
+⚠️ **Windows サービス（`sc.exe`）にはしないでください。** サービスは Session 0 で走るので、
+デスクトップの `berth` から berthd に届かないことがあります。ログオントリガなら、ログオンしている
+ユーザーの session で動きます。
+
+⚠️ **ログオンしていない間は走りません**（unix の `loginctl enable-linger` に当たる設定はありません）。
+
 ## service 管理下では自動起動を切る（推奨）
 
 berthd を service に任せるなら、その環境で **`BERTHD_NO_SPAWN=1`** を立てておくと、service が

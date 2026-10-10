@@ -43,7 +43,12 @@ detect_target() {
     case "$os" in
         Linux)  case "$arch" in x86_64|amd64) printf 'linux-x86_64' ;; *) die "この環境向けはまだ配っていません: $os/$arch" ;; esac ;;
         Darwin) case "$arch" in arm64|aarch64) printf 'macos-arm64' ;; *) die "この環境向けはまだ配っていません: $os/${arch}（Intel Mac は未配布）" ;; esac ;;
-        *) die "この環境向けはまだ配っていません: ${os}（Windows は別手順）" ;;
+        # 🧑 **Windows はこの入口を使わないと決めた**（2026-09-18）—— 面ごとに入口は 1 つ。
+        # ⭐ あちらは素の Windows で前提ゼロになる（`curl` も `tar` も System32 に在る）ので、
+        #   git-bash を経由させる理由が無い。🚫 ここに Windows の腕を置かない。
+        MINGW*|MSYS*|CYGWIN*) die "Windows は PowerShell の入口を使ってください:
+   irm https://raw.githubusercontent.com/$REPO/main/scripts/install.ps1 | iex" ;;
+        *) die "この環境向けはまだ配っていません: ${os}" ;;
     esac
 }
 
