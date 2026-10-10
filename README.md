@@ -30,7 +30,7 @@ curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/instal
 **Windows**（PowerShell）
 
 ```powershell
-irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
+iex (irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1).TrimStart([char]0xFEFF)
 ```
 
 ⭐ **入れる前に用意する物はありません** —— Windows 10 以降には `curl` も `tar` も
@@ -39,7 +39,11 @@ irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 |
 ⚠️ **git-bash から `install.sh` を撃っても入りません** —— 面ごとに入口は 1 つで、
 Windows は上の PowerShell の入口だけです。
 ⚠️ **ARM64 向けはまだ配っていません。** x64 版はエミュレーションで動きますが
-その分遅くなるので、installer は黙って入れずに断ります（押し切るなら `-Target windows-x86_64`）。
+その分遅くなるので、installer は黙って入れずに断ります。押し切るなら、引数を渡せるこちらの形で入れてください:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1).TrimStart([char]0xFEFF))) -Target windows-x86_64
+```
 
 ⭐ **常駐させるなら** —— Windows には `systemd` も `launchd` も無いので、**タスクスケジューラのログオントリガ**を使います（管理者権限不要）。
 手順は [dist/README.md](dist/README.md) に在ります。

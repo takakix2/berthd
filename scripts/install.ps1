@@ -4,12 +4,15 @@
 #    `curl.exe`（8.21.0）も `tar.exe`（bsdtar 3.8.8）も System32 に在るので、
 #    git-bash も 7-Zip も要らない。∴ 配る形は unix と同じ `.tar.gz` のままでよい。
 #
-#   irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
+#   iex (irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1).TrimStart([char]0xFEFF)
 #
 # 🚨 **このファイルは UTF-8 with BOM で保存すること。**
 #    📏 実測: BOM 無しを `powershell -File` で撃つと、日本語の行の後で**構文エラー**になる
 #    （5.1 はファイルをコードページで読む）。⭐ BOM が在れば読み違えない。
-#    ⚠️ `irm | iex` の経路は HTTP なので BOM に依らないが、**保存して撃つ人が居る**。
+#    🚨 **その BOM が `irm | iex` を壊す**（📏 2026-10-10 実測・0.5.0 の公開後に発見）——
+#       `irm` の文字列には U+FEFF が残り、`param` より前の「文」になって構文エラー。
+#       ∴ 入口の 1 行は **BOM を外してから流す**（上の綴り）。素の `irm | iex` に戻さないこと。
+#       ⏭ ASCII だけにして BOM を捨てる案は issue（README の 1 行を定番に戻せる）。
 #
 # 🚨 **要件は install.sh と同じ 4 本**（片方だけ直すと方針が割れる）:
 #   ① 入れる前に「いま在る物」と「これから入れる物」を名乗る
