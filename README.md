@@ -1,292 +1,248 @@
-# berthd — 閉じても消えないシェルセッション
+# berthd — Shell sessions that survive closures
 
-`berthd` は **PTY を所有する小さなデーモン**です。シェルの寿命を端末アプリから切り離すので、
-**アプリを閉じてもシェルは動き続け、あとで同じセッションへ scrollback ごと戻れます**。
-セッションの永続化をするという意味では tmux と同じですが、ヘッドレスです。画面の描画はしません。
-端末エミュレーションはクライアントが行いますので、好きな端末を使ってください。
+[日本語](README.ja.md)
 
-**画面を持たないのは設計です。** 分割やタブ（多重化）は端末アプリの仕事で、berthd はやりません。
-代わりに**セッションはいくつでも作れます** —— ペインを 2 つ開いて、それぞれで `berth attach a` /
-`berth attach b` と打てば、どちらもその端末を閉じたあとも生き続けます。
-画面を持たないので、**どの端末のどのペインの中にでも入れます**（tmux のペイン、端末アプリの
-タブや分割、ssh の向こう）。
+`berthd` is a lightweight daemon that owns a PTY. By decoupling the shell's lifespan from your terminal emulator app, your shell keeps running even if you close the app, allowing you to reconnect to the exact same session—complete with its scrollback buffer—later. 
 
-同梱の **`berth`** がセッションを操作する CLI です。どのシェルからでも使えます。
+Like `tmux`, it provides session persistence, but it is **headless**. It does no rendering; terminal emulation is entirely handled by your client, so you can use whatever terminal you prefer.
 
-```
+The lack of a UI is intentional. Window splitting and tabs (multiplexing) are the job of your terminal app, not `berthd`. Instead, you can create as many sessions as you like—open two panes, run `berth attach a` and `berth attach b` in each, and both will keep running even after you close their respective terminals. Because it has no UI, it can live inside any pane of any terminal (tmux panes, terminal app tabs/splits, or over SSH).
+
+The companion CLI `berth` is used to manage sessions and works from any shell.
+
+```bash
 $ berth ls
-* mywork  zsh   106x29  ~/src/app
+- mywork  zsh   106x29  ~/src/app
   build   zsh   120x40  ~/src/lib
 ```
 
-## インストール
+---
 
-**Linux / macOS**
+## Installation
 
-```sh
+### Linux / macOS
+```bash
 curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
 ```
 
-**Windows**（PowerShell）
-
+### Windows (PowerShell)
 ```powershell
 irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 ```
 
-⭐ **入れる前に用意する物はありません** —— Windows 10 以降には `curl` も `tar` も
-標準で入っているので、展開ソフトも要りません。配布物は `.zip` なので、
-エクスプローラーからダブルクリックで開くこともできます。
-⚠️ **git-bash から `install.sh` を撃っても入りません** —— 面ごとに入口は 1 つで、
-Windows は上の PowerShell の入口だけです。
-⚠️ **ARM64 向けはまだ配っていません。** x64 版はエミュレーションで動きますが
-その分遅くなるので、installer は黙って入れずに断ります。押し切るなら、引数を渡せるこちらの形で入れてください:
+* **No prerequisites required:** Windows 10+ includes `curl` and `tar` out of the box, so no extraction software is needed. Since the distribution is a `.zip` archive, you can even open it directly from Explorer by double-clicking.
+* **⚠️ Do not run `install.sh` from `git-bash`:** There is only one proper entry point per environment. On Windows, use the PowerShell entry point above.
+* **⚠️ ARM64 builds are not yet distributed.** While x64 builds will run via emulation, they are slower, so the installer will refuse to proceed automatically. If you want to force it anyway, run the installer with the target argument:
+  ```powershell
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
+  ```
+* **For daemon persistence on Windows:** Since Windows lacks `systemd` or `launchd`, use Task Scheduler's logon trigger (no administrator privileges required). Instructions can be found in `dist/README.md`.
+* 🚨 **When updating an in-use binary via `berth attach`:** Make sure to move the active `.exe` aside before replacing it. The moved `*.exe.old` cannot be deleted until that process terminates, but the next installation will automatically clean it up.
 
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
+The installer performs the following steps:
+1. Downloads the latest release and verifies it with `SHA256SUMS`.
+2. Installs `berthd` and `berth` to `~/.local/bin` (can be overridden with `BERTHD_INSTALL_DIR`).
+3. **Stop the daemon** using `berth kill-server` before installing. The installation will abort if active sessions remain.
+
+### Manual Installation
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xzcd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 ```
 
-⭐ **常駐させるなら** —— Windows には `systemd` も `launchd` も無いので、**タスクスケジューラのログオントリガ**を使います（管理者権限不要）。
-手順は [dist/README.md](dist/README.md) に在ります。
-
-🚨 **`berth attach` の中から入れ直すとき**は、使用中の `.exe` を退かしてから置きます。
-退かした `*.exe.old` はそのプロセスが終わるまで消せないので、**次に install したときに自動で掃きます**。
-
-インストーラーは次のことをします。
-
-- 最新のリリースをダウンロードし、`SHA256SUMS` で検算する
-- `berthd` と `berth` を `~/.local/bin` にインストールする（`BERTHD_INSTALL_DIR` で変更できます）
-- インストールの前に**`berth kill-server`** でデーモンを停止してください。セッションが残っている場合はインストールを中断します。
-
-手動でインストールする場合:
-
-```sh
-curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz
-cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
-```
-
-Windows で手で入れる場合（同じく標準の道具だけで済みます）:
-
+**Windows (using built-in tools):**
 ```powershell
 curl.exe -fsSL -o berthd.zip https://github.com/takakix2/berthd/releases/latest/download/berthd-windows-x86_64.zip
 tar.exe -xf berthd.zip
 Move-Item berthd-*\berth*.exe $env:USERPROFILE\.local\bin\ -Force
 ```
 
-- 配布しているのは **Linux x86_64** と **macOS arm64**（`berthd-macos-arm64.tar.gz`）です。
-- 展開先はディレクトリです（カレントに `berthd` は出来ません）。
-- **`berth` と `berthd` の版が違うと動かない場合があります。** うまく動かないときは `berth info` で両方の版を確かめてください。
+* Distributed binaries include Linux x86_64 and macOS arm64 (`berthd-macos-arm64.tar.gz`).
+* The extraction target is a directory (it won't drop `berthd` directly into the current directory).
+* Mismatched versions of `berth` and `berthd` may cause issues. If things aren't working as expected, verify both versions using `berth info`.
 
-## 使い方
+---
 
-```sh
-berth attach work     # セッション work に入る（無ければ作る。berthd も居なければ起こす）
-# … 作業 …
-berth d               # セッションから抜ける（シェルは berthd の下で動き続ける）
-berth attach work     # 同じシェルに戻る
+## Usage
+
+```bash
+berth attach work     # Enter session 'work' (creates it if missing, spawns berthd if not running)
+# … work happens …
+berth d               # Detach from the session (the shell keeps running under berthd)
+berth attach work     # Reconnect to the same shell
 ```
 
-| コマンド                                   |                                                                                             |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `berth attach [<name>]`（`a`）             | このターミナルでセッションに入る（無ければ作る）                                            |
-| `berth attach -s <shell> [<name>]`         | **指定したシェル**でセッションを作る（無ければ作る。`-s` / `--shell`）                      |
-| `berth attach -r <name>`                   | **見るだけ**で入る（打鍵も画面の大きさも送らない。`q` か Ctrl-C で抜ける）                  |
-| `berth detach [<name>]`（`d`）             | セッションから抜ける（省略時は今いるセッション。見ている端末も含めて全員が抜ける）          |
-| `berth ls`                                 | 一覧（`*` が今いるセッション）                                                              |
-| `berth rename [<session>] <name>`（`r`）   | 名前を付け直す（省略時は今いるセッション）                                                  |
-| `berth kill <session>`                     | セッションを閉じる（中のシェルごと）                                                        |
-| `berth info`                               | 接続先の berthd（ホストと版）と、**この端末で新しいセッションを作ったら起きるシェル**を表示 |
-| `berth kill-server [-f]`                   | berthd を停止する（セッションが残っていれば `-f` が要る）                                   |
-| `berth --version` / `berthd --version`     | 版を表示（デーモンには接続しません）                                                        |
+---
 
-`<name>` には名前（`main` など）か id を渡せます。セッションの中では `BERTHD_SESSION` に自分の
-session id が入っているので、`berth ls` の `*` や、引数 1 つの `berth rename <name>` が効きます。
+## Commands
 
-### シェルを指定してセッションを作る（`-s` / `--shell`）
+| Command | Description |
+| :--- | :--- |
+| `berth attach [<name>]` (or `a`) | Enter the session in this terminal (creates one if it doesn't exist) |
+| `berth attach -s <shell> [<name>]` | Create a session with a specific shell (`-s` / `--shell`) |
+| `berth attach -r <name>` | View-only attach (does not send keystrokes or resize the screen; press `q` or `Ctrl-C` to exit) |
+| `berth detach [<name>]` (or `d`) | Detach from the session (defaults to current session; disconnects all viewers including the terminal screen) |
+| `berth ls` | List sessions (`*` indicates your current session) |
+| `berth rename [<session>] <name>` (or `r`) | Rename a session (defaults to current session) |
+| `berth kill <session>` | Close a session (along with its inner shell) |
+| `berth info` | Display connection info for `berthd` (host & version) and the shell that would be spawned for a new session |
+| `berth kill-server [-f]` | Stop `berthd` (requires `-f` if active sessions remain) |
+| `berth --version` / `berthd --version` | Display version (does not connect to the daemon) |
 
-新しいセッションを作るとき、起動するシェルをアドホックに指定できます。
-`-s <shell>`、`--shell <shell>`、`--shell=<shell>` が使えます。
+`<name>` accepts either a session name (e.g., `main`) or an ID. Inside a session, `BERTHD_SESSION` holds your session ID, making shortcuts like `berth ls` (* marker) and single-argument `berth rename <name>` work smoothly.
 
-```sh
-berth attach -s /bin/bash debug      # このセッションだけ bash で起動する
-berth attach -s hsh work             # hsh で新しいセッションを作る
-berth attach -s powershell.exe win   # Windows でシェルを指定する
+### Specifying a Shell for a New Session (`-s` / `--shell`)
+You can ad-hoc specify which shell to launch when creating a new session using `-s <shell>`, `--shell <shell>`, or `--shell=<shell>`:
+
+```bash
+berth attach -s /bin/bash debug      # Launch only this session with bash
+berth attach -s hsh work             # Create a new session with hsh
+berth attach -s powershell.exe win   # Specify a shell on Windows
 ```
 
-- **新規作成時（セッションが存在しないとき）のみ有効です。** すでに動いている既存セッションに attach する場合は、そのセッションで動いているシェルにそのまま接続します（後からシェルをすり替えることはしません）。
-- **すべての面（Linux / macOS / Windows）で効きます。** 環境変数（`BERTHD_SHELL`）や親プロセスの自動観測よりも最優先（出所: `client:cli_flag`）で解決されます。
-- `-r`（read-only）と組み合わせることもできます（例: `berth attach -s /bin/bash -r monitor`）。
+* Only applies when creating a new session (when it does not already exist). If attaching to an already running session, you connect to the shell currently active inside it (shells are not swapped on-the-fly).
+* Works across all platforms (Linux / macOS / Windows). Takes the absolute highest priority over environment variables (`BERTHD_SHELL`) or automatic parent process detection (`client:cli_flag`).
+* Can be combined with `-r` (read-only), e.g., `berth attach -s /bin/bash -r monitor`.
 
-### 複数の端末から同じセッションに入る
+### Multiple Terminals Accessing the Same Session
+* Only one terminal can send keystrokes at a time. If another terminal attaches to the same session via `berth attach`, the previous terminal displays `[detached from …]` and disconnects (the shell keeps running). Keystrokes from multiple terminals will never mix.
+* A read-only option is available (`berth attach -r`). Any number of terminals can attach in read-only mode. Read-only clients do not alter screen dimensions; since screen size is determined by the active typing terminal, smaller read-only screens may experience visual glitches with full-screen apps like `vim` or `htop`.
+* If a viewer falls behind on output, only that viewer gets dropped (the typing side is never blocked).
+* `-r` requires `berthd` 0.3.0 or later. `berth` will refuse to connect to older daemons (use `berth kill-server` to restart/upgrade).
 
-- **キーを打てるのは常に 1 台です。** 別の端末から `berth attach` で同じセッションに入ると、前の端末は
-  `[detached from …]` と表示して抜けます（シェルはそのまま動き続けます）。前の端末の打鍵が
-  混ざることはありません。
-- **read-only のオプションがあります**（`berth attach -r`）。見るだけなら何台でも入れます。
-  read-only では画面の大きさを変えません。画面の大きさはキーを打っている端末が決めるので、read-onlyの端末の画面が
-  それより小さいと、全画面のアプリ（`vim` や `htop`）の表示では画面の表示が崩れます。
-- 見る側が出力に追いつけないときは、**その見る側だけ**が外れます（打っている側は止まりません）。
-- `-r` は berthd 0.3.0 以降が必要です。古い berthd に対しては `berth` が断ります
-  （`berth kill-server` で入れ替えてください）。
+---
 
-### いつものペインを一度に開く
+## Opening Your Usual Panes All at Once
 
-berthd は、もともと iOS / デスクトップの端末アプリ argotty の
-**停泊所**として作りました。ところが画面を持たないので、**どの端末が来ても迎え入れられました** ——
-並べ方は端末に任せ、berthd はセッションの寿命だけを持ちます。
+`berthd` was originally built as a landing zone for the iOS/desktop terminal app `argotty`. Because it lacks a UI, it could embrace any incoming terminal—leaving layout arrangements to the terminal while `berthd` solely retains session lifespans.
 
-`berth attach <name>` は**無ければ作り、あれば繋ぐ**ので、レイアウトを開くスクリプトは
-**初回も 2 回目も同じ 1 本**で済みます。朝に叩けばセッションが生まれ、端末を閉じたあとにもう一度
-叩けば同じシェルへ戻ります。
+Since `berth attach <name>` creates a session if it doesn't exist and connects if it does, the layout-launching script remains identical on both first-time and subsequent runs. Run it in the morning to spin up sessions, or run it again after closing your terminal to jump right back into the same shell.
 
-**Windows Terminal**（PowerShell から）:
-
+**Windows Terminal (from PowerShell):**
 ```powershell
 wt new-tab --title dev berth attach dev `; split-pane -V berth attach build `; split-pane -H berth attach logs
 ```
+*(⚠️ PowerShell consumes `;` as its own delimiter, so you must escape it as ``;` when passing to `wt`. Plain `;` works fine from `cmd`).*
 
-⚠️ PowerShell では `;` が自分の区切りとして食われるので、`wt` へ渡すには `` `; `` と書きます
-（cmd からなら素の `;` で通ります）。
-
-**WezTerm**（WezTerm の中のシェルから）:
-
-```sh
+**WezTerm (from a shell inside WezTerm):**
+```bash
 wezterm cli spawn -- berth attach dev
 wezterm cli split-pane --right -- berth attach build
 ```
 
-同じセッションは、別の端末や ssh の向こうからでも `berth attach build` で入れます。
+The exact same session can also be accessed via `berth attach build` from another terminal or over SSH.
 
-### デーモンの寿命
+---
 
-- berthd は**自分からは終了しません**（アイドルタイムアウトはありません）。停止させるのは `berth kill-server` です。
-- berthd を**常駐させたい**ときは、systemd / launchd の設定が [dist/README.md](dist/README.md) にあります。
+## Daemon Lifespan
+* `berthd` never terminates on its own (there is no idle timeout). It must be explicitly stopped via `berth kill-server`.
+* If you want `berthd` to run as a persistent background service, `systemd` / `launchd` configurations are available in `dist/README.md`.
 
-### 環境変数
+---
 
-| 変数                  | 効果                                                                                                                                                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BERTHD_SOCKET`       | ソケットの場所（既定は `$XDG_RUNTIME_DIR/berthd.sock`、無ければ `~/.berth/berthd.sock`）。**明示すると `berth attach` は berthd を起こしません**（転送したソケットなど、別の接続先を指している可能性があるため） |
-| `BERTHD_NO_SPAWN`     | 立てると `berth attach` が berthd を起こさなくなる。常駐させている環境で二重起動を防ぐ                                                                                                                           |
-| `BERTHD_BIN`          | `berth attach` が起こす berthd の場所（既定は `berth` の隣、次に `PATH`）                                                                                                                                        |
-| `BERTHD_SHELL`        | セッションで使うシェル（下記の「セッションのシェルはどう決まるか」）。`berth` を打った環境と berthd 自身の環境の**どちらでも**効きます（前者が先）                                                                                     |
-| `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`）                                                                                                                                                                  |
-| `BERTHD_SESSION`      | **berthd が子プロセスに渡す**自分の session id（上記）                                                                                                                                                           |
-| `AUDIT_ACTOR`         | `berth` が attach のときに名乗る名前（journal の `actor`）。管理者が付ける想定です                                                                                                                       |
+## Environment Variables
 
-## セッションのシェルはどう決まるか
+| Variable | Effect |
+| :--- | :--- |
+| `BERTHD_SOCKET` | Path to the socket (default: `$XDG_RUNTIME_DIR/berthd.sock`, falling back to `~/.berth/berthd.sock`). Setting this prevents `berth attach` from auto-spawning a daemon (as it might point to a forwarded socket or external endpoint). |
+| `BERTHD_NO_SPAWN` | When set, prevents `berth attach` from auto-spawning a daemon. Useful to prevent duplicate instances in environments where the daemon is already persistently running. |
+| `BERTHD_BIN` | Path to the `berthd` executable invoked by `berth attach` (default: next to `berth`, then falling back to `PATH`). |
+| `BERTHD_SHELL` | Shell used for sessions (see "How the Session Shell is Decided" below). Effective in both the environment where `berth` is invoked and inside `berthd` itself (the former takes precedence). |
+| `BERTHD_JOURNAL_PATH` | Path to the journal file (default: `~/.berth/journal.jsonl`). |
+| `BERTHD_SESSION` | Session ID passed by `berthd` to its child processes. |
+| `AUDIT_ACTOR` | Name claimed by `berth` upon attach (recorded in the journal's `actor` field). Intended for administrative labeling. |
 
-`berth attach <名前>` で新しいセッションを作るとき、シェルは次の順で決まります。
+---
 
-| 順  | 何を見るか                                                                                       | 出所の呼び名          |
-| --- | ------------------------------------------------------------------------------------------------ | --------------------- |
-| 1   | `--shell <path>` / `-s <path>`（CLI 引数・最優先・**面に依らない**）                              | `client:cli_flag`     |
-| 2   | `BERTHD_SHELL`（`berth` を打った環境・**面に依らない**）                                         | `client:berthd_shell` |
-| 3   | **そのとき走っていたシェル**（`berth` の親プロセス。`/etc/shells` に載っているシェルだけ・unix のみ）| `client:parent_shell` |
-| 4   | `$SHELL`（同じく `berth` を打った環境・unix のみ）                                               | `client:env_shell`    |
-| 5   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`） | `daemon:…`            |
+## How the Session Shell is Decided
 
-`berth info` がこの端末の答えを表示します。同じ呼び名が journal にも `shell_src` として残ります。
+When creating a new session via `berth attach <name>`, the shell is determined in the following priority order:
 
-**3 番目が要る理由**: `bash` から `fish` と打って fish に居るとき、`$SHELL` は `/bin/bash` のままです
-（`$SHELL` は「ログインシェルに何を選んだか」の申告値で、いま走っているシェルではありません）。
-そのため、**いま使っているシェルがそのままセッションのシェルになります**。
+| Priority | Source | Designation |
+| :---: | :--- | :--- |
+| 1 | `--shell <path>` / `-s <path>` (CLI argument — highest priority, cross-platform) | `client:cli_flag` |
+| 2 | `BERTHD_SHELL` (environment where `berth` is invoked, cross-platform) | `client:berthd_shell` |
+| 3 | The currently running shell (parent process of `berth`, restricted to shells listed in `/etc/shells`, Unix only) | `client:parent_shell` |
+| 4 | `$SHELL` (in the environment where `berth` is invoked, Unix only) | `client:env_shell` |
+| 5 | Fallback defaults on the `berthd` side (`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`) | `daemon:…` |
 
-**Windows では 3 と 4 は効きません**（`/etc/shells` が無く、git-bash の `$SHELL` は
-`/bin/bash.exe` という MSYS の綴りで、Windows のプロセス起動からは解決できないため）。
-切り替えは `-s / --shell` オプションまたは `BERTHD_SHELL` を使ってください。
+`berth info` displays the resolved answer for your current environment. The same designation is preserved in the journal under `shell_src`.
 
-**0.3.x まではデーモンの環境だけで決まっていました。** `berth` はデーモンが居なければ自分で
-起こすので、最初に起こした端末の環境がデーモンに焼き付き、以後どの端末から attach しても
-そのシェルが出ていました（tmux のペインで 1 度打つと、そのデーモンは終わるまで tmux の
-`default-shell` を配り続ける、という形で出ます）。
+**Why priority #3 is necessary:** If you run `fish` from `bash` and find yourself inside `fish`, `$SHELL` remains `/bin/bash` (because `$SHELL` declares your chosen login shell, not necessarily what's running right now). Consequently, the currently active shell is inherited for the session.
+
+On Windows, priorities #3 and #4 do not apply (there is no `/etc/shells`, and git-bash's `$SHELL` uses the MSYS notation `/bin/bash.exe`, which cannot be resolved by Windows process spawning). Use the `-s` / `--shell` option or `BERTHD_SHELL` instead.
+
+*(Note: Up to version 0.3.x, the shell was decided solely by the daemon's environment. Because `berth` auto-spawns the daemon if missing, the environment of the terminal that first started it got baked into the daemon, meaning any subsequent `berth attach` from any terminal inherited that exact shell — similar to how launching tmux in a pane forces that daemon's `default-shell` onto everything until it exits).*
+
+---
 
 ## Journal
 
-berthd は **セッションを起こしたこと**と **attach の開始・終了**を `~/.berth/journal.jsonl` に
-NDJSON（Flux v1 レコード）で残します。1 行に**観測した事実と、クライアントの自己申告**の両方が
-載ります。設定は要りません。
+`berthd` records session creations, attach starts, and exits into `~/.berth/journal.jsonl` using NDJSON ([Rheon Protocol](https://github.com/rheon-protocol/spec) v1 records). No configuration is required. Each line combines observed facts with client self-reporting.
 
-| 行                            | いつ                     | 何が読めるか                                                                      |
-| ----------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| `spawn:started`               | セッションを起こしたとき | どのシェルで起こしたか（`shell`）と、**それを誰が決めたか**（`shell_src`）、`cwd` |
-| `spawn:failed`                | シェルを起こせなかったとき | 何を起こそうとしたか（`shell` / `shell_src`）と、**なぜ駄目だったか**（`reason`・1 行） |
-| `attach:start` / `attach:end` | 誰かが入った / 出たとき  | 誰が入ったか、どのくらい居たか、どう抜けたか                                      |
+### Event Types (`spawn` / `attach`)
+* `spawn:started`: Logged when a session is spawned, including which shell was used (`shell`), who decided it (`shell_src`), and `cwd`.
+* `spawn:failed`: Logged when a shell fails to spawn, including what was attempted (`shell` / `shell_src`) and why it failed (`reason`, single-line).
+* `attach:start` / `attach:end`: Logged when someone enters or leaves, recording who entered, duration, and how they exited.
 
-`spawn:started` が別の行なのは、**一覧が「今」しか答えられない**からです ——
-セッションが消えると、それがどのシェルだったかはどこにも残りませんでした。
+`spawn:started` is logged separately because listings only answer "the present" — once a session is destroyed, its original shell would otherwise be lost entirely.
 
-| 欄                                    | 何か                                                                                                                                                                                      | 出所                                   |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `peer_uid` / `peer_pid`               | 接続してきたプロセス                                                                                                                                                                      | カーネルが観測した値                   |
-| `peer_auid`                           | ログインしたときのユーザーの監査 uid（`su` や `sudo` をまたいでも変わらない）                                                                                                             | カーネルが観測した値（Linux / macOS）  |
-| `peer_ancestry` / `peer_ancestry_src` | attach した瞬間の、接続してきたプロセスの親の並び（最大 8 段）と、どこまで読めたか                                                                                                        | カーネルが観測した値                   |
-| `actor` / `actor_src`                 | クライアントが名乗った名前と、その出所                                                                                                                                                    | クライアントの自己申告（検証しません） |
-| `shell` / `shell_src`（起こした行）   | 実際に起こした実行ファイルと、**それを誰が決めたか**（下記）                                                                                                                              | berthd                                 |
-| `read_only`                           | 見るだけの接続か                                                                                                                                                                          | berthd                                 |
-| `how`（終了の行）                     | `exited`（シェルが終了した）／ `detached`（外された。別の端末が入って置き換えられた場合も含む）／ `closed`（自分で抜けた・接続が閉じた）／ `too_slow`（見る側が出力に追いつけず外された） | berthd                                 |
+### Record Fields
 
-観測だけでは足りないのは、**人も AI エージェントも同じユーザーの uid で動く**からです。
-自己申告だけでも足りません（誰でも名乗れます）。並べておけば、一致していれば問題なし、
-食い違っていれば調べる、が 1 行で読めます。名乗らなかった attach の欄は空のままにします
-（「誰も名乗らなかった」も事実なので、OS のユーザー名で埋めません）。
+| Field | Source | Description |
+| :--- | :--- | :--- |
+| `peer_uid` / `peer_pid` | Kernel-observed | UID and PID of the connecting process |
+| `peer_auid` | Kernel-observed | Audit UID of the logged-in user (persists across `su` or `sudo`, Linux / macOS) |
+| `peer_ancestry` / `peer_ancestry_src` | Kernel-observed | Ancestry chain (up to 8 levels deep) of the connecting process's parent hierarchy at the moment of attach |
+| `actor` / `actor_src` | Client self-reported | Name claimed by the client and its source (unverified) |
+| `shell` / `shell_src` (spawn events) | Daemon-resolved | Actual executed binary and how it was decided |
+| `read_only` | Daemon-resolved | Whether it was a view-only connection |
+| `how` (exit events) | Daemon-resolved | `exited` (shell finished) / `detached` (disconnected because another terminal took over) / `closed` (manually left / connection closed) / `too_slow` (viewer dropped for failing to keep up with output) |
 
-`berth` の名乗りは、**`berth attach` を打った環境**の変数から拾います（空の値は名乗りとして扱いません）。
+Kernel observations are necessary because both humans and AI agents operate under the same user UID, but self-reporting alone isn't enough (anyone can claim anything). Having both side-by-side lets you instantly verify consistency at a glance. Unnamed attaches leave the `actor` field blank (omission is also a fact; it is not backfilled with the OS username).
 
-1. **`AUDIT_ACTOR`** —— 名乗らせたいときはこれを設定します（`actor_src` は `audit_actor`）
-2. AI エージェントの実行環境が置く印 —— `AI_AGENT`、`CLAUDE_CODE_ENTRYPOINT`（`agent`）。
-   **設定しなくても付きます**
+`berth` picks up its actor identity from the environment variables of the process invoking `berth attach` (empty values are ignored):
+1. `AUDIT_ACTOR` — Explicit override if you want to assign a specific actor name (`actor_src` becomes `audit_actor`).
+2. AI agent environment markers — Automatically populated if running under agents like `AI_AGENT` or `CLAUDE_CODE_ENTRYPOINT` (`agent`).
 
-設定はシェルを選びません（bash / zsh は `export AUDIT_ACTOR=…`、fish は `set -gx AUDIT_ACTOR …`。
-常駐させているなら unit の `Environment=`）。効くのは **`berth attach` を打つ環境**です ——
-セッションの中で設定しても、その attach の記録には載りません。
+This setting is shell-agnostic (`export AUDIT_ACTOR=…` for bash/zsh, `set -gx AUDIT_ACTOR …` for fish; use `Environment=` in service units if running persistently). It only respects the environment where `berth attach` is run—setting it *inside* the session won't affect that attach record.
 
-`actor` / `actor_src` だけが**裏の取れない値**です（クライアントが名乗ったまま記録します）。
-`peer_` が付く欄はカーネルに訊いた観測値で、名乗りとは別の出所です。
+Only `actor` / `actor_src` values cannot be independently verified (they remain as reported by the client). Fields prefixed with `peer_` are kernel-audited and independent of claims.
 
-### どの道具が attach したのかを知りたいとき
+### Tracing Which Tool Attached
+🚫 **Do not rely on `actor`** — That is merely "a name chosen by someone for aggregation," and remains blank if left unspecified.
+▶ **Read `peer_ancestry` instead.**
 
-🚫 **`actor` を見ないでください** —— あれは「集計するために**誰かが選んだ名前**」で、
-誰も選ばなければ空のままです。▶ **`peer_ancestry` を読んでください**。
+`berthd` does not inject parent process names into `actor`. Immediate parents are usually shells or terminals (`bash`, `WindowsTerminal.exe`, `pwsh.exe`, etc.), so the actual tool used for attaching sits slightly deeper. Inspect the entire ancestry chain.
 
-berthd は親プロセスの名前を `actor` に入れません。直の親はたいていシェルや端末
-（`bash`・`WindowsTerminal.exe`・`pwsh.exe` など）で、attach した道具はその**もう少し奥**に出ます。
-並び全体を見てください。
+⚠️ **Normalization note:** When comparing, ignore case and strip any trailing `.exe` (since the same tool might be recorded as both `claude` and `claude.exe`).
 
-⚠️ 突き合わせるときは、**末尾の `.exe` を大小を無視して落として**から比べてください
-（同じ道具が `claude` と `claude.exe` の 2 通りで載ることがあります）。
+Because ancestry tracing does not stop at `sshd` or similar boundaries, "what launched this" remains fully traceable even across SSH connections.
 
-親の並びは `sshd` などで止めずに辿るので、ssh 越しの attach でも「何から起動されたか」が残ります。
+`berthd` does not record commands typed inside the shell (following a design where byte streams are never intercepted or parsed). Command auditing is the shell's responsibility; if your shell records `BERTHD_SESSION` into its own history logs (e.g., `hsh`'s `session:start`), you can correlate `berthd`'s journal with your shell's logs via the session ID. Since the session ID indicates "descendant of that session," narrow down timestamps using the attach record's start and end times.
 
-berthd はシェルの中で打たれたコマンドを記録しません（流れるバイト列を解釈しない設計です）。
-コマンドの記録はシェル側の仕事で、シェルが `BERTHD_SESSION` を自分の記録に残せば
-（例: hsh の `session:start`）、berthd の journal とシェル側の記録を session id で突き合わせられます。
-session id が示すのは「そのセッションの子孫である」ことなので、時刻は attach レコードの
-開始・終了で絞ってください。
+---
 
-### 権限
+## Permissions
+Sockets are created with `0600`, `~/.berth` with `0700`, and journals with `0600` directly by `berthd` (independent of the launching umask). macOS lacks `XDG_RUNTIME_DIR`, so sockets are placed in `~/.berth`, making these tight restrictions function as built-in security.
 
-ソケットは `0600`、`~/.berth` は `0700`、journal は `0600` で berthd 自身が作ります（起動元の umask に
-依存しません）。macOS には `XDG_RUNTIME_DIR` が無く、ソケットは `~/.berth` に置かれるため、
-この締め付けがそのまま防御になります。
+---
 
-## 旧 `argod` / `argo` から乗り換える
+## Migrating from Legacy `argod` / `argo`
+As of v0.2.0, the daemon is named `berthd` and the CLI is `berth`. The name `argo` conflicted with the Argo Workflows CLI, causing both to return empty lists without error when installed together. To avoid this ambiguity, no legacy compatibility alias is provided.
 
-v0.2.0 でデーモンは **`berthd`**、CLI は **`berth`** になりました。`argo` という名前は
-[Argo Workflows](https://argoproj.io) の CLI と重なり、どちらにも `list` があるため、両方入っている
-環境ではエラーにならずに**違う方の空の一覧**が返ります。この衝突を残さないため、`argo` の互換名は
-用意していません。
-
-```sh
-argo attach build      # 旧
-berth attach build     # 新
+```bash
+argo attach build      # Old
+berth attach build     # New
 ```
 
-- インストーラーは旧名のバイナリを消します。常駐させていた場合は unit / plist も入れ替えてください
-  （[dist/README.md](dist/README.md)）。
-- 環境変数は `ARGOD_*` → `BERTHD_*` です。
-- journal が `~/.argo/journal.jsonl` に残っていれば、手で `~/.berth/journal.jsonl` へ移してください。
-- `~/.argo/config.toml` は berthd の設定ではないので、そのままで構いません。
+* The installer automatically removes old-named binaries. If you ran it as a persistent service, update your service unit / plist files accordingly (`dist/README.md`).
+* Environment variables have been renamed from `ARGOD_*` to `BERTHD_*`.
+* If you have existing journal logs in `~/.argo/journal.jsonl`, manually move them over to `~/.berth/journal.jsonl`.
+* `~/.argo/config.toml` is not used by `berthd` and can be left as-is.
 
-## ライセンス
+---
 
-ISC（[LICENSE](LICENSE)）。同梱しているサードパーティの表示は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にあります。
+## License
+ISC (`LICENSE`). Third-party notices and attributions are listed in `THIRD-PARTY-NOTICES.md`.
