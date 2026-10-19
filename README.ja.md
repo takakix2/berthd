@@ -21,6 +21,19 @@ $ berth ls
   build   zsh   120x40  ~/src/lib
 ```
 
+## Windows Terminal
+
+`berthd` は **Windows でそのまま動きます**。WSL も Cygwin も要らず、入れるのは `.exe` 2 本だけです。
+タブと分割は Windows Terminal が既に持っています。berthd が足すのは、Windows Terminal に無いもの
+—— **窓より長生きするセッション**だけです。
+
+- **いつものシェルで**: PowerShell（Windows PowerShell 5.1 / PowerShell 7）、`cmd`、そのほかのシェルも `berth attach -s <shell>` で。
+- **窓を閉じてもシェルは残る**: タブやペイン、窓ごと閉じても、セッションは動き続けます。`berth attach <名前>` で戻れます。
+- **履歴は Windows Terminal 自身のスクロールに戻る**: 入り直すと、これまでの出力が端末そのものへ描き直されます。
+  マウスホイール・検索（`Ctrl+Shift+F`）・コピーがいつもどおり使えます。
+- **タブがどこに居るかを名乗る**: attach している間、タブの題名は `berth: <名前>` で、その後ろに中で動いているものの題名が続きます。
+- **ペインは 1 行で開ける**: [いつものペインを一度に開く](#いつものペインを一度に開く) を見てください。
+
 ## インストール
 
 **Linux / macOS**
@@ -92,6 +105,7 @@ berth attach work     # 同じシェルに戻る
 | `berth attach [<name>]`（`a`）             | このターミナルでセッションに入る（無ければ作る）                                            |
 | `berth attach -s <shell> [<name>]`         | **指定したシェル**でセッションを作る（無ければ作る。`-s` / `--shell`）                      |
 | `berth attach -r <name>`                   | **見るだけ**で入る（打鍵も画面の大きさも送らない。`q` か Ctrl-C で抜ける）                  |
+| `berth attach --no-scrollback [<name>]`    | **最後の画面だけ**戻す（既定は、これまでの出力をこの端末のスクロールに流してから戻る。下記） |
 | `berth detach [<name>]`（`d`）             | セッションから抜ける（省略時は今いるセッション。見ている端末も含めて全員が抜ける）          |
 | `berth ls`                                 | 一覧（`*` が今いるセッション）                                                              |
 | `berth rename [<session>] <name>`（`r`）   | 名前を付け直す（省略時は今いるセッション）                                                  |
@@ -102,6 +116,19 @@ berth attach work     # 同じシェルに戻る
 
 `<name>` には名前（`main` など）か id を渡せます。セッションの中では `BERTHD_SESSION` に自分の
 session id が入っているので、`berth ls` の `*` や、引数 1 つの `berth rename <name>` が効きます。
+
+### 入り直すと、これまでの出力が端末のスクロールで辿れる（既定）
+
+`berth attach` で戻ると、そのセッションがこれまでに出した出力（直近 512KB ぶん）を**この端末自身の
+スクロールバック**に流してから、今の画面を描き直します。tmux のように別の画面に閉じ込めないので、
+ホイールや端末の検索・コピーがいつもどおり効きます。全画面アプリ（vim など）の中に居たまま戻った
+ときは履歴を流さず、今の画面だけを描きます。
+
+- **最後の画面だけでよい**（今までの形）: `berth attach --no-scrollback <name>`
+- **ずっと外す**: `BERTH_SCROLLBACK=off`
+- **自動で外れる**: tmux / zellij / screen の中（外側が既にスクロールを持っている）と、出力が端末でないとき。
+  中で試したいときは `--scrollback` で押し切れます。
+- ⚠️ 同じペインで抜けて入り直すと、同じ履歴がもう一度積まれます（端末のスクロールは `berth` から読めないため）。
 
 ### シェルを指定してセッションを作る（`-s` / `--shell`）
 
@@ -174,6 +201,7 @@ wezterm cli split-pane --right -- berth attach build
 | `BERTHD_SHELL`        | セッションで使うシェル（下記の「セッションのシェルはどう決まるか」）。`berth` を打った環境と berthd 自身の環境の**どちらでも**効きます（前者が先）                                                                                     |
 | `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`）                                                                                                                                                                  |
 | `BERTHD_SESSION`      | **berthd が子プロセスに渡す**自分の session id（上記）                                                                                                                                                           |
+| `BERTH_SCROLLBACK`    | `off`（`0` / `no` / `false` も可）で、`berth attach` が出力を端末のスクロールに流すのをやめる（`--no-scrollback` をずっと付けた形）                                                                                   |
 | `AUDIT_ACTOR`         | `berth` が attach のときに名乗る名前（journal の `actor`）。管理者が付ける想定です                                                                                                                       |
 
 ## セッションのシェルはどう決まるか

@@ -18,6 +18,18 @@ $ berth ls
 
 ---
 
+## Windows Terminal
+
+`berthd` runs natively on Windows — no WSL, no Cygwin, nothing to install besides two `.exe` files. Windows Terminal already does tabs and split panes; `berthd` adds the one thing it lacks: sessions that outlive the window.
+
+* **Works with your usual shells:** PowerShell (Windows PowerShell 5.1 and PowerShell 7), `cmd`, or any other shell via `berth attach -s <shell>`.
+* **Close the window, keep the shell:** closing a Windows Terminal tab, pane, or the whole window leaves the session running. `berth attach <name>` brings it back.
+* **History comes back into Windows Terminal's own scrollback:** on reattach, the session's past output is replayed into the terminal itself, so the mouse wheel, search (`Ctrl+Shift+F`), and copy work as usual.
+* **The tab says where you are:** while attached, the tab title reads `berth: <name>`, followed by the title of whatever is running inside.
+* **Panes are one command away:** see [Opening Your Usual Panes All at Once](#opening-your-usual-panes-all-at-once).
+
+---
+
 ## Installation
 
 ### Linux / macOS
@@ -48,7 +60,7 @@ The installer performs the following steps:
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xzcd berthd-*/ && install -m755 berthd berth ~/.local/bin/
+curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz && cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 ```
 
 **Windows (using built-in tools):**
@@ -82,6 +94,7 @@ berth attach work     # Reconnect to the same shell
 | `berth attach [<name>]` (or `a`) | Enter the session in this terminal (creates one if it doesn't exist) |
 | `berth attach -s <shell> [<name>]` | Create a session with a specific shell (`-s` / `--shell`) |
 | `berth attach -r <name>` | View-only attach (does not send keystrokes or resize the screen; press `q` or `Ctrl-C` to exit) |
+| `berth attach --no-scrollback [<name>]` | Restore only the last screen (by default the session's past output is replayed into this terminal's own scrollback first; see below) |
 | `berth detach [<name>]` (or `d`) | Detach from the session (defaults to current session; disconnects all viewers including the terminal screen) |
 | `berth ls` | List sessions (`*` indicates your current session) |
 | `berth rename [<session>] <name>` (or `r`) | Rename a session (defaults to current session) |
@@ -91,6 +104,15 @@ berth attach work     # Reconnect to the same shell
 | `berth --version` / `berthd --version` | Display version (does not connect to the daemon) |
 
 `<name>` accepts either a session name (e.g., `main`) or an ID. Inside a session, `BERTHD_SESSION` holds your session ID, making shortcuts like `berth ls` (* marker) and single-argument `berth rename <name>` work smoothly.
+
+### Reattaching Brings Back the Session's Output in Your Terminal's Own Scrollback (Default)
+
+When you `berth attach` to an existing session, its past output (the most recent 512 KB) is replayed into **your terminal's own scrollback buffer** before the current screen is redrawn. Nothing is confined to a separate screen the way tmux does it, so mouse-wheel scrolling, search, and copy work exactly as they normally do. If the session was left inside a full-screen app (such as `vim`), the history is not replayed and only the current screen is drawn.
+
+* **Only the last screen** (the previous behavior): `berth attach --no-scrollback <name>`
+* **Always off**: `BERTH_SCROLLBACK=off`
+* **Automatically off**: inside tmux / zellij / screen (the outer multiplexer already owns the scrollback) and when stdout is not a terminal. Force it on with `--scrollback` if you want to try it inside one anyway.
+* ⚠️ Detaching and reattaching in the same pane appends the same history again (`berth` cannot read the terminal's scrollback).
 
 ### Specifying a Shell for a New Session (`-s` / `--shell`)
 You can ad-hoc specify which shell to launch when creating a new session using `-s <shell>`, `--shell <shell>`, or `--shell=<shell>`:
@@ -151,6 +173,7 @@ The exact same session can also be accessed via `berth attach build` from anothe
 | `BERTHD_SHELL` | Shell used for sessions (see "How the Session Shell is Decided" below). Effective in both the environment where `berth` is invoked and inside `berthd` itself (the former takes precedence). |
 | `BERTHD_JOURNAL_PATH` | Path to the journal file (default: `~/.berth/journal.jsonl`). |
 | `BERTHD_SESSION` | Session ID passed by `berthd` to its child processes. |
+| `BERTH_SCROLLBACK` | Set to `off` (`0` / `no` / `false` also work) to stop `berth attach` from replaying output into the terminal's scrollback (same as always passing `--no-scrollback`). |
 | `AUDIT_ACTOR` | Name claimed by `berth` upon attach (recorded in the journal's `actor` field). Intended for administrative labeling. |
 
 ---
