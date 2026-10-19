@@ -28,6 +28,13 @@
 # and `exit` closes the user's PowerShell window before they can read the message
 # (measured). Die prints the message and throws: iex returns to the prompt, and
 # `powershell -File` still exits non-zero.
+#
+# For the same reason the body below runs inside `& { ... }`: evaluated by iex, a
+# plain script body assigns straight into the caller's session, and the user is
+# left with $ErrorActionPreference = "Stop" (every non-terminating error in that
+# window becomes fatal from then on) plus $d, $b, $tmp, $tag and the rest.
+# A child scope keeps all of it here;
+# the param() values are still readable inside, and a throw still gets out.
 
 [CmdletBinding()]
 param(
@@ -38,6 +45,8 @@ param(
     # Name the target by hand -- exists so someone who was refused can insist.
     [string] $Target  = ""
 )
+
+& {
 
 $ErrorActionPreference = "Stop"
 $MinTag = "v0.2.0"   # releases before this ship argod / argo (pre-rename)
@@ -275,3 +284,5 @@ Say "   next:    berth attach work    (berthd starts itself when needed)"
 } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
+
+}   # end of the child scope (see the header)
