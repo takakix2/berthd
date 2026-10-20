@@ -113,6 +113,7 @@ When you `berth attach` to an existing session, its past output (the most recent
 * **Always off**: `BERTH_SCROLLBACK=off`
 * **Automatically off**: inside tmux / zellij / screen (the outer multiplexer already owns the scrollback) and when stdout is not a terminal. Force it on with `--scrollback` if you want to try it inside one anyway.
 * ⚠️ Detaching and reattaching in the same pane appends the same history again (`berth` cannot read the terminal's scrollback).
+* A **new** session takes the window from the top: the line you typed `berth attach` on scrolls up into the scrollback (as when tmux takes the screen), and the shell starts on the first row. This keeps the live screen and the reattached screen the same shape.
 
 ### Specifying a Shell for a New Session (`-s` / `--shell`)
 You can ad-hoc specify which shell to launch when creating a new session using `-s <shell>`, `--shell <shell>`, or `--shell=<shell>`:
