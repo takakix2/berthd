@@ -112,7 +112,7 @@ When you `berth attach` to an existing session, its past output (the most recent
 * **Only the last screen** (the previous behavior): `berth attach --no-scrollback <name>`
 * **Always off**: `BERTH_SCROLLBACK=off`
 * **Automatically off**: inside tmux / zellij / screen (the outer multiplexer already owns the scrollback) and when stdout is not a terminal. Force it on with `--scrollback` if you want to try it inside one anyway.
-* **Reattaching the same pane resumes only the tail:** on terminals that give each pane a stable id (Windows Terminal, WezTerm, kitty, iTerm2, Apple Terminal), `berth` remembers how far it already showed and replays only what is new, so the history is not appended twice. On terminals that expose no pane id, it falls back to replaying the whole 512 KB each time.
+* **Reattaching the same pane resumes only the tail:** on terminals that give each pane a stable id (Windows Terminal, WezTerm, kitty, iTerm2, Apple Terminal, Alacritty), `berth` remembers how far it already showed and replays only what is new, so the history is not appended twice. On terminals that expose no pane id, it falls back to replaying the whole 512 KB each time.
 * A **new** session takes the window from the top: the line you typed `berth attach` on scrolls up into the scrollback (as when tmux takes the screen), and the shell starts on the first row. This keeps the live screen and the reattached screen the same shape.
 * When the recording overflows (512 KB), the oldest output is dropped **at a line boundary**, and the colour, full-screen state and title in force at that point are carried over to the replay. The first replayed line is never the tail of a cut escape sequence or half a character.
 
@@ -188,17 +188,39 @@ When creating a new session via `berth attach <name>`, the shell is determined i
 | :---: | :--- | :--- |
 | 1 | `--shell <path>` / `-s <path>` (CLI argument — highest priority, cross-platform) | `client:cli_flag` |
 | 2 | `BERTHD_SHELL` (environment where `berth` is invoked, cross-platform) | `client:berthd_shell` |
-| 3 | The currently running shell (parent process of `berth`, restricted to shells listed in `/etc/shells`, Unix only) | `client:parent_shell` |
-| 4 | `$SHELL` (in the environment where `berth` is invoked, Unix only) | `client:env_shell` |
-| 5 | Fallback defaults on the `berthd` side (`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`) | `daemon:…` |
+| 3 | `default-shell` in `~/.berth/config.toml` (see [Configuration File](#configuration-file), cross-platform) | `client:config` |
+| 4 | The currently running shell (parent process of `berth`, restricted to shells listed in `/etc/shells`, Unix only) | `client:parent_shell` |
+| 5 | `$SHELL` (in the environment where `berth` is invoked, Unix only) | `client:env_shell` |
+| 6 | Fallback defaults on the `berthd` side (`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`) | `daemon:…` |
 
 `berth info` displays the resolved answer for your current environment. The same designation is preserved in the journal under `shell_src`.
 
-**Why priority #3 is necessary:** If you run `fish` from `bash` and find yourself inside `fish`, `$SHELL` remains `/bin/bash` (because `$SHELL` declares your chosen login shell, not necessarily what's running right now). Consequently, the currently active shell is inherited for the session.
+**Why priority #4 is necessary:** If you run `fish` from `bash` and find yourself inside `fish`, `$SHELL` remains `/bin/bash` (because `$SHELL` declares your chosen login shell, not necessarily what's running right now). Consequently, the currently active shell is inherited for the session.
 
-On Windows, priorities #3 and #4 do not apply (there is no `/etc/shells`, and git-bash's `$SHELL` uses the MSYS notation `/bin/bash.exe`, which cannot be resolved by Windows process spawning). Use the `-s` / `--shell` option or `BERTHD_SHELL` instead.
+On Windows, priorities #4 and #5 do not apply (there is no `/etc/shells`, and git-bash's `$SHELL` uses the MSYS notation `/bin/bash.exe`, which cannot be resolved by Windows process spawning). Use the `-s` / `--shell` option, `BERTHD_SHELL`, or `default-shell` in the configuration file instead.
 
 *(Note: Up to version 0.3.x, the shell was decided solely by the daemon's environment. Because `berth` auto-spawns the daemon if missing, the environment of the terminal that first started it got baked into the daemon, meaning any subsequent `berth attach` from any terminal inherited that exact shell — similar to how launching tmux in a pane forces that daemon's `default-shell` onto everything until it exits).*
+
+---
+
+## Configuration File
+
+`berth` reads `~/.berth/config.toml` (the same directory as the journal and the pane files, on every OS). Set `BERTH_CONFIG=<path>` to read a different file. The file is optional.
+
+```toml
+# The shell for new sessions (same as typing `berth attach -s hsh` every time).
+default-shell = "hsh"
+
+# Environment variables added to new sessions only.
+[env]
+CLAUDE_CODE_SHELL = "~/.local/libexec/hsh-as-bash/bash"
+```
+
+* `default-shell` ranks below `-s` and `BERTHD_SHELL` and above the detected shell (see [How the Session Shell is Decided](#how-the-session-shell-is-decided)). The journal records it as `client:config`.
+* `[env]` applies **only when a session is created**. Reattaching an existing session does not add anything. A leading `~` or `~/` in a value expands to your home directory; `$VAR` is not expanded.
+* A file that cannot be read — a TOML error, an unknown key, a wrong type — is **not silently ignored**: `berth` prints one line saying so and continues as if there were no file. `berth info` shows the path and whether it was read.
+
+**Why `[env]`:** an AI agent such as Claude Code runs each command in its own shell, chosen by an environment variable (`CLAUDE_CODE_SHELL`), not in the session's shell. With the example above, starting `claude` inside a `berth` session makes its commands run under `hsh` too, so they land in `hsh`'s journal with the agent as the actor — without changing your login shell.
 
 ---
 

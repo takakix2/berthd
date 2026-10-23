@@ -128,7 +128,7 @@ session id が入っているので、`berth ls` の `*` や、引数 1 つの `
 - **ずっと外す**: `BERTH_SCROLLBACK=off`
 - **自動で外れる**: tmux / zellij / screen の中（外側が既にスクロールを持っている）と、出力が端末でないとき。
   中で試したいときは `--scrollback` で押し切れます。
-- **同じペインで入り直すと続きだけ流します**: ペインごとに安定した ID を出す端末（Windows Terminal・WezTerm・kitty・iTerm2・Apple Terminal）では、`berth` がどこまで見せたかを覚えていて新しい分だけ流すので、同じ履歴が二重に積まれません。ID を出さない端末では、毎回 512 KB をまるごと流す今までの形に落ちます。
+- **同じペインで入り直すと続きだけ流します**: ペインごとに安定した ID を出す端末（Windows Terminal・WezTerm・kitty・iTerm2・Apple Terminal・Alacritty）では、`berth` がどこまで見せたかを覚えていて新しい分だけ流すので、同じ履歴が二重に積まれません。ID を出さない端末では、毎回 512 KB をまるごと流す今までの形に落ちます。
 - **新しく作る**ときは窓を上端から使います: `berth attach` を打った行はスクロールへ上がり（tmux が画面を取るのと同じ動き）、シェルは 1 行目から始まります。生きているときと入り直したときの画面を同じ形に保つためです。
 - 録画が上限（512KB）を越えると古い出力から**行の切れ目で**捨てられ、その時点で効いていた色・全画面の状態・題名は再生に引き継がれます。再生の 1 行目が命令の尻尾や文字の半分から始まることはありません。
 
@@ -214,24 +214,46 @@ wezterm cli split-pane --right -- berth attach build
 | --- | ------------------------------------------------------------------------------------------------ | --------------------- |
 | 1   | `--shell <path>` / `-s <path>`（CLI 引数・最優先・**面に依らない**）                              | `client:cli_flag`     |
 | 2   | `BERTHD_SHELL`（`berth` を打った環境・**面に依らない**）                                         | `client:berthd_shell` |
-| 3   | **そのとき走っていたシェル**（`berth` の親プロセス。`/etc/shells` に載っているシェルだけ・unix のみ）| `client:parent_shell` |
-| 4   | `$SHELL`（同じく `berth` を打った環境・unix のみ）                                               | `client:env_shell`    |
-| 5   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`） | `daemon:…`            |
+| 3   | `~/.berth/config.toml` の `default-shell`（[設定ファイル](#設定ファイル)・**面に依らない**）       | `client:config`       |
+| 4   | **そのとき走っていたシェル**（`berth` の親プロセス。`/etc/shells` に載っているシェルだけ・unix のみ）| `client:parent_shell` |
+| 5   | `$SHELL`（同じく `berth` を打った環境・unix のみ）                                               | `client:env_shell`    |
+| 6   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`） | `daemon:…`            |
 
 `berth info` がこの端末の答えを表示します。同じ呼び名が journal にも `shell_src` として残ります。
 
-**3 番目が要る理由**: `bash` から `fish` と打って fish に居るとき、`$SHELL` は `/bin/bash` のままです
+**4 番目が要る理由**: `bash` から `fish` と打って fish に居るとき、`$SHELL` は `/bin/bash` のままです
 （`$SHELL` は「ログインシェルに何を選んだか」の申告値で、いま走っているシェルではありません）。
 そのため、**いま使っているシェルがそのままセッションのシェルになります**。
 
-**Windows では 3 と 4 は効きません**（`/etc/shells` が無く、git-bash の `$SHELL` は
+**Windows では 4 と 5 は効きません**（`/etc/shells` が無く、git-bash の `$SHELL` は
 `/bin/bash.exe` という MSYS の綴りで、Windows のプロセス起動からは解決できないため）。
-切り替えは `-s / --shell` オプションまたは `BERTHD_SHELL` を使ってください。
+切り替えは `-s / --shell` オプション・`BERTHD_SHELL`・設定ファイルの `default-shell` を使ってください。
 
 **0.3.x まではデーモンの環境だけで決まっていました。** `berth` はデーモンが居なければ自分で
 起こすので、最初に起こした端末の環境がデーモンに焼き付き、以後どの端末から attach しても
 そのシェルが出ていました（tmux のペインで 1 度打つと、そのデーモンは終わるまで tmux の
 `default-shell` を配り続ける、という形で出ます）。
+
+## 設定ファイル
+
+`berth` は `~/.berth/config.toml` を読みます（journal・ペインファイルと同じ場所。どの OS でも同じ）。別のファイルを読ませるには `BERTH_CONFIG=<path>`。無くても動きます。
+
+```toml
+# 新しいセッションのシェル（毎回 `berth attach -s hsh` と打つのと同じ）
+default-shell = "hsh"
+
+# 新しく作るセッションにだけ足す環境変数
+[env]
+CLAUDE_CODE_SHELL = "~/.local/libexec/hsh-as-bash/bash"
+```
+
+- `default-shell` は `-s` と `BERTHD_SHELL` に負け、観測したシェルに勝ちます（[セッションのシェルはどう決まるか](#セッションのシェルはどう決まるか)）。journal には `client:config` と残ります。
+- `[env]` は**セッションを作るときだけ**効きます。既存のセッションに入り直しても足しません。値の先頭の `~` / `~/` はホームに展開します。`$VAR` は展開しません。
+- 読めないファイル（TOML の誤り・知らないキー・型違い）は**黙って無視しません**。`berth` が 1 行名乗って、設定が無いものとして続けます。`berth info` に場所と読めたかが出ます。
+
+**`[env]` が要る理由**: Claude Code のようなエージェントは、命令ごとに自分のシェルを起こします。どのシェルかは環境変数（`CLAUDE_CODE_SHELL`）で決まり、セッションのシェルは使いません。上の例のように書いておくと、`berth` のセッションの中で `claude` を起こしたときエージェントの命令も `hsh` の上で走り、ログインシェルを変えずに `hsh` の journal にエージェントの記録が残ります。
+
+---
 
 ## Journal
 
