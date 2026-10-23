@@ -112,8 +112,9 @@ When you `berth attach` to an existing session, its past output (the most recent
 * **Only the last screen** (the previous behavior): `berth attach --no-scrollback <name>`
 * **Always off**: `BERTH_SCROLLBACK=off`
 * **Automatically off**: inside tmux / zellij / screen (the outer multiplexer already owns the scrollback) and when stdout is not a terminal. Force it on with `--scrollback` if you want to try it inside one anyway.
-* ⚠️ Detaching and reattaching in the same pane appends the same history again (`berth` cannot read the terminal's scrollback).
+* **Reattaching the same pane resumes only the tail:** on terminals that give each pane a stable id (Windows Terminal, WezTerm, kitty, iTerm2, Apple Terminal), `berth` remembers how far it already showed and replays only what is new, so the history is not appended twice. On terminals that expose no pane id, it falls back to replaying the whole 512 KB each time.
 * A **new** session takes the window from the top: the line you typed `berth attach` on scrolls up into the scrollback (as when tmux takes the screen), and the shell starts on the first row. This keeps the live screen and the reattached screen the same shape.
+* When the recording overflows (512 KB), the oldest output is dropped **at a line boundary**, and the colour, full-screen state and title in force at that point are carried over to the replay. The first replayed line is never the tail of a cut escape sequence or half a character.
 
 ### Specifying a Shell for a New Session (`-s` / `--shell`)
 You can ad-hoc specify which shell to launch when creating a new session using `-s <shell>`, `--shell <shell>`, or `--shell=<shell>`:
@@ -228,7 +229,7 @@ Kernel observations are necessary because both humans and AI agents operate unde
 
 `berth` picks up its actor identity from the environment variables of the process invoking `berth attach` (empty values are ignored):
 1. `AUDIT_ACTOR` — Explicit override if you want to assign a specific actor name (`actor_src` becomes `audit_actor`).
-2. AI agent environment markers — Automatically populated if running under agents like `AI_AGENT` or `CLAUDE_CODE_ENTRYPOINT` (`agent`).
+2. The generic marker an AI agent sets for itself — `AI_AGENT` (`agent`). Vendor-specific markers are not read.
 
 This setting is shell-agnostic (`export AUDIT_ACTOR=…` for bash/zsh, `set -gx AUDIT_ACTOR …` for fish; use `Environment=` in service units if running persistently). It only respects the environment where `berth attach` is run—setting it *inside* the session won't affect that attach record.
 
