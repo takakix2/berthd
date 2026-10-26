@@ -37,12 +37,13 @@ $ berth ls
 
 ## Installation
 
-### Linux / macOS
-```bash
-curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
-```
+The installer downloads the latest release, verifies it against `SHA256SUMS`, and puts `berthd` and `berth` in `~/.local/bin` (override with `BERTHD_INSTALL_DIR`).
+When updating, stop the daemon first with `berth kill-server`; the installer aborts if sessions are still running.
 
-### Windows (PowerShell)
+### Windows
+
+In PowerShell:
+
 ```powershell
 irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 ```
@@ -52,31 +53,52 @@ irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 |
   ```powershell
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
   ```
-* **For daemon persistence on Windows:** Since Windows lacks `systemd` or `launchd`, use Task Scheduler's logon trigger (no administrator privileges required). Instructions can be found in `dist/README.md`.
-* 🚨 **When updating an in-use binary via `berth attach`:** Make sure to move the active `.exe` aside before replacing it. The moved `*.exe.old` cannot be deleted until that process terminates, but the next installation will automatically clean it up.
+* To keep the daemon running across logons, use a Task Scheduler logon trigger (no administrator rights needed). See [dist/README.md](dist/README.md).
+* When updating from inside `berth attach`, the in-use `.exe` is moved aside first. The `*.exe.old` cannot be deleted until that process exits; the next install cleans it up.
 
-The installer performs the following steps:
-1. Downloads the latest release and verifies it with `SHA256SUMS`.
-2. Installs `berthd` and `berth` to `~/.local/bin` (can be overridden with `BERTHD_INSTALL_DIR`).
-3. **Stop the daemon** using `berth kill-server` before installing. The installation will abort if active sessions remain.
+Manual install (built-in tools only):
 
-### Manual Installation
-
-**Linux / macOS:**
-```bash
-curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz && cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
-```
-
-**Windows (using built-in tools):**
 ```powershell
 curl.exe -fsSL -o berthd.zip https://github.com/takakix2/berthd/releases/latest/download/berthd-windows-x86_64.zip
 tar.exe -xf berthd.zip
 Move-Item berthd-*\berth*.exe $env:USERPROFILE\.local\bin\ -Force
 ```
 
-* Distributed binaries include Linux x86_64 and macOS arm64 (`berthd-macos-arm64.tar.gz`).
-* The extraction target is a directory (it won't drop `berthd` directly into the current directory).
-* Mismatched versions of `berth` and `berthd` may cause issues. If things aren't working as expected, verify both versions using `berth info`.
+### Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
+```
+
+* The build is x86_64.
+* To keep the daemon running, use the systemd user service. See [dist/README.md](dist/README.md).
+
+Manual install:
+
+```bash
+curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz
+cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
+```
+
+### macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
+```
+
+* The build is Apple Silicon (arm64).
+* To keep the daemon running, use the launchd LaunchAgent. See [dist/README.md](dist/README.md).
+
+Manual install:
+
+```bash
+curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-macos-arm64.tar.gz | tar xz
+cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
+```
+
+### On every OS
+
+Mismatched versions of `berth` and `berthd` may misbehave. If something is off, check both versions with `berth info`.
 
 ---
 

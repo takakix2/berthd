@@ -39,45 +39,26 @@ $ berth ls
 
 ## インストール
 
-**Linux / macOS**
+インストーラーは最新のリリースをダウンロードして `SHA256SUMS` で検算し、`berthd` と `berth` を `~/.local/bin` に置きます（`BERTHD_INSTALL_DIR` で変更できます）。
+入れ直すときは先に `berth kill-server` でデーモンを止めてください。セッションが残っていると中断します。
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
-```
+### Windows
 
-**Windows**（PowerShell）
+PowerShell で:
 
 ```powershell
 irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 ```
 
-配布物は `.zip` なので、エクスプローラーからダブルクリックで開くこともできます。
-⚠️ **Windows ARM64 向けはまだ配っていません。** x64 版をエミュレーションで入れるなら、`-Target windows-x86_64` を付けてください:
+- 配布物は `.zip` なので、エクスプローラーからダブルクリックで開くこともできます。
+- ⚠️ **Windows ARM64 向けはまだ配っていません。** x64 版をエミュレーションで入れるなら、`-Target windows-x86_64` を付けてください:
+  ```powershell
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
+  ```
+- 常駐させるなら、タスクスケジューラのログオントリガを使います（管理者権限不要）。手順は [dist/README.md](dist/README.md)。
+- `berth attach` の中から入れ直すときは、使用中の `.exe` を退かしてから置きます。退かした `*.exe.old` はそのプロセスが終わるまで消せませんが、次に install したときに自動で掃きます。
 
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
-```
-
-⭐ **常駐させるなら** —— Windows には `systemd` も `launchd` も無いので、**タスクスケジューラのログオントリガ**を使います（管理者権限不要）。
-手順は [dist/README.md](dist/README.md) に在ります。
-
-🚨 **`berth attach` の中から入れ直すとき**は、使用中の `.exe` を退かしてから置きます。
-退かした `*.exe.old` はそのプロセスが終わるまで消せないので、**次に install したときに自動で掃きます**。
-
-インストーラーは次のことをします。
-
-- 最新のリリースをダウンロードし、`SHA256SUMS` で検算する
-- `berthd` と `berth` を `~/.local/bin` にインストールする（`BERTHD_INSTALL_DIR` で変更できます）
-- インストールの前に**`berth kill-server`** でデーモンを停止してください。セッションが残っている場合はインストールを中断します。
-
-手動でインストールする場合:
-
-```sh
-curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz
-cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
-```
-
-Windows で手で入れる場合（同じく標準の道具だけで済みます）:
+手で入れる場合（標準の道具だけで済みます）:
 
 ```powershell
 curl.exe -fsSL -o berthd.zip https://github.com/takakix2/berthd/releases/latest/download/berthd-windows-x86_64.zip
@@ -85,9 +66,41 @@ tar.exe -xf berthd.zip
 Move-Item berthd-*\berth*.exe $env:USERPROFILE\.local\bin\ -Force
 ```
 
-- 配布しているのは **Linux x86_64** と **macOS arm64**（`berthd-macos-arm64.tar.gz`）です。
-- 展開先はディレクトリです（カレントに `berthd` は出来ません）。
-- **`berth` と `berthd` の版が違うと動かない場合があります。** うまく動かないときは `berth info` で両方の版を確かめてください。
+### Linux
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
+```
+
+- 配布しているのは x86_64 です。
+- 常駐させるなら systemd の user service を使います。手順は [dist/README.md](dist/README.md)。
+
+手で入れる場合:
+
+```sh
+curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz
+cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
+```
+
+### macOS
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
+```
+
+- 配布しているのは Apple Silicon（arm64）です。
+- 常駐させるなら launchd の LaunchAgent を使います。手順は [dist/README.md](dist/README.md)。
+
+手で入れる場合:
+
+```sh
+curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-macos-arm64.tar.gz | tar xz
+cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
+```
+
+### どの OS でも
+
+`berth` と `berthd` の版が違うと動かない場合があります。うまく動かないときは `berth info` で両方の版を確かめてください。
 
 ## 使い方
 
