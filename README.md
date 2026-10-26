@@ -23,18 +23,6 @@ $ berth ls
 
 ---
 
-## Windows Terminal
-
-`berthd` runs natively on Windows — no WSL, no Cygwin, nothing to install besides two `.exe` files. Windows Terminal already does tabs and split panes; `berthd` adds the one thing it lacks: sessions that outlive the window.
-
-* **Works with your usual shells:** PowerShell (Windows PowerShell 5.1 and PowerShell 7), `cmd`, or any other shell via `berth attach -s <shell>`.
-* **Close the window, keep the shell:** closing a Windows Terminal tab, pane, or the whole window leaves the session running. `berth attach <name>` brings it back.
-* **History comes back into Windows Terminal's own scrollback:** on reattach, the session's past output is replayed into the terminal itself, so the mouse wheel, search (`Ctrl+Shift+F`), and copy work as usual.
-* **The tab says where you are:** while attached, the tab title reads `berth: <name>`, followed by the title of whatever is running inside.
-* **Panes are one command away:** see [Opening Your Usual Panes All at Once](#opening-your-usual-panes-all-at-once).
-
----
-
 ## Installation
 
 The installer downloads the latest release, verifies it against `SHA256SUMS`, and puts `berthd` and `berth` in `~/.local/bin` (override with `BERTHD_INSTALL_DIR`).

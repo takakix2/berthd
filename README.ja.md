@@ -24,19 +24,6 @@ $ berth ls
   build   pwsh  120x40  C:\src\lib
 ```
 
-## Windows Terminal
-
-`berthd` は **Windows でそのまま動きます**。WSL も Cygwin も要らず、入れるのは `.exe` 2 本だけです。
-タブと分割は Windows Terminal が既に持っています。berthd が足すのは、Windows Terminal に無いもの
-—— **ウィンドウより長生きするセッション**だけです。
-
-- **いつものシェルで**: PowerShell（Windows PowerShell 5.1 / PowerShell 7）、`cmd`、そのほかのシェルも `berth attach -s <shell>` で。
-- **ウィンドウを閉じてもシェルは残る**: タブやペイン、ウィンドウごと閉じても、セッションは動き続けます。`berth attach <名前>` で戻れます。
-- **履歴は Windows Terminal 自身のスクロールに戻る**: 入り直すと、これまでの出力が端末そのものへ描き直されます。
-  マウスホイール・検索（`Ctrl+Shift+F`）・コピーがいつもどおり使えます。
-- **タブがどこに居るかを名乗る**: attach している間、タブの題名は `berth: <名前>` で、その後ろに中で動いているものの題名が続きます。
-- **ペインは 1 行で開ける**: [いつものペインを一度に開く](#いつものペインを一度に開く) を見てください。
-
 ## インストール
 
 インストーラーは最新のリリースをダウンロードして `SHA256SUMS` で検算し、`berthd` と `berth` を `~/.local/bin` に置きます（`BERTHD_INSTALL_DIR` で変更できます）。
