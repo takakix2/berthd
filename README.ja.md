@@ -52,8 +52,7 @@ irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 |
 ```
 
 配布物は `.zip` なので、エクスプローラーからダブルクリックで開くこともできます。
-⚠️ **ARM64 向けはまだ配っていません。** x64 版はエミュレーションで動きますが
-その分遅くなるので、installer は黙って入れずに断ります。押し切るなら、引数を渡せるこちらの形で入れてください:
+⚠️ **Windows ARM64 向けはまだ配っていません。** x64 版をエミュレーションで入れるなら、`-Target windows-x86_64` を付けてください:
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64

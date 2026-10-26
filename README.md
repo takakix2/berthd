@@ -48,7 +48,7 @@ irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 |
 ```
 
 * The distribution is a `.zip` archive, so you can also open it from Explorer by double-clicking.
-* **⚠️ ARM64 builds are not yet distributed.** While x64 builds will run via emulation, they are slower, so the installer will refuse to proceed automatically. If you want to force it anyway, run the installer with the target argument:
+* **⚠️ No Windows ARM64 build yet.** To install the x64 build under emulation, pass `-Target windows-x86_64`:
   ```powershell
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
   ```
