@@ -11,9 +11,7 @@
 
 **Close the window. The shell keeps running.**
 
-Under the hood it is a small daemon that owns the PTY, so the shell's lifetime belongs to the daemon rather than to the terminal app. Like `tmux` it keeps sessions alive, but it is **headless**: no rendering, no splitting, no tabs — those stay with your terminal. It lives inside any pane of any terminal (Windows Terminal, tmux panes, tabs and splits, over SSH), and the same two binaries run on Windows, Linux and macOS.
-
-What it does not do: survive a logout or a reboot. That is the same line `tmux` draws. "Close the window" is the promise; "turn off the machine" is not.
+Under the hood it is a small daemon that owns the PTY, so the shell's lifetime belongs to the daemon rather than to the terminal app. Like `tmux` it keeps sessions alive, but it is **headless**: it stays small by leaving panes and tabs, and all the drawing, to your terminal. It lives inside any pane of any terminal (Windows Terminal, tmux panes, tabs and splits, over SSH), and the same two binaries run on Windows, Linux and macOS.
 
 The companion CLI `berth` manages sessions from any shell.
 
