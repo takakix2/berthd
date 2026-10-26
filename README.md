@@ -47,8 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/instal
 irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 ```
 
-* **No prerequisites required:** Windows 10+ includes `curl` and `tar` out of the box, so no extraction software is needed. Since the distribution is a `.zip` archive, you can even open it directly from Explorer by double-clicking.
-* **⚠️ Do not run `install.sh` from `git-bash`:** There is only one proper entry point per environment. On Windows, use the PowerShell entry point above.
+* The distribution is a `.zip` archive, so you can also open it from Explorer by double-clicking.
 * **⚠️ ARM64 builds are not yet distributed.** While x64 builds will run via emulation, they are slower, so the installer will refuse to proceed automatically. If you want to force it anyway, run the installer with the target argument:
   ```powershell
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64

@@ -51,11 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/instal
 irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 ```
 
-⭐ **入れる前に用意する物はありません** —— Windows 10 以降には `curl` も `tar` も
-標準で入っているので、展開ソフトも要りません。配布物は `.zip` なので、
-エクスプローラーからダブルクリックで開くこともできます。
-⚠️ **git-bash から `install.sh` を撃っても入りません** —— 面ごとに入口は 1 つで、
-Windows は上の PowerShell の入口だけです。
+配布物は `.zip` なので、エクスプローラーからダブルクリックで開くこともできます。
 ⚠️ **ARM64 向けはまだ配っていません。** x64 版はエミュレーションで動きますが
 その分遅くなるので、installer は黙って入れずに断ります。押し切るなら、引数を渡せるこちらの形で入れてください:
 
