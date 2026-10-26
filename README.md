@@ -155,7 +155,7 @@ Since `berth attach <name>` creates a session if it doesn't exist and connects i
 ```powershell
 wt new-tab --title dev berth attach dev `; split-pane -V berth attach build `; split-pane -H berth attach logs
 ```
-*(⚠️ PowerShell consumes `;` as its own delimiter, so you must escape it as ``;` when passing to `wt`. Plain `;` works fine from `cmd`).*
+⚠️ PowerShell consumes `;` as its own delimiter, so write it as `` `; `` when passing it to `wt` (a plain `;` works from `cmd`).
 
 **WezTerm (from a shell inside WezTerm):**
 ```bash
