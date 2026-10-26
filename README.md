@@ -9,7 +9,7 @@
 
 [日本語](README.ja.md)
 
-**Windows Terminal, plus the one thing `tmux` would have given you: sessions that outlive the window.**
+**Close the window. The shell stays.**
 
 Windows Terminal already has tabs and split panes. What it does not have is persistence: close the window and every shell in it is gone. `berthd` adds exactly that, natively on Windows — no WSL, no Cygwin, two `.exe` files. Run `berth attach claude`, start Claude Code inside, close the window at the end of the day; tomorrow `berth attach claude` brings the same session back, past output and all, into Windows Terminal's own scrollback.
 
