@@ -125,10 +125,7 @@ When you `berth attach` to an existing session, its past output (the most recent
 
 * **Only the last screen** (the previous behavior): `berth attach --no-scrollback <name>`
 * **Always off**: `BERTH_SCROLLBACK=off`
-* **Automatically off**: inside tmux / zellij / screen (the outer multiplexer already owns the scrollback) and when stdout is not a terminal. Force it on with `--scrollback` if you want to try it inside one anyway.
 * **Reattaching the same pane resumes only the tail:** on terminals that give each pane a stable id (Windows Terminal, WezTerm, kitty, iTerm2, Apple Terminal, Alacritty), `berth` remembers how far it already showed and replays only what is new, so the history is not appended twice. On terminals that expose no pane id, it falls back to replaying the whole 512 KB each time.
-* A **new** session takes the window from the top: the line you typed `berth attach` on scrolls up into the scrollback (as when tmux takes the screen), and the shell starts on the first row. This keeps the live screen and the reattached screen the same shape.
-* When the recording overflows (512 KB), the oldest output is dropped **at a line boundary**, and the colour, full-screen state and title in force at that point are carried over to the replay. The first replayed line is never the tail of a cut escape sequence or half a character.
 
 ### Specifying a Shell for a New Session (`-s` / `--shell`)
 You can ad-hoc specify which shell to launch when creating a new session using `-s <shell>`, `--shell <shell>`, or `--shell=<shell>`:
@@ -145,15 +142,12 @@ berth attach -s powershell.exe win   # Specify a shell on Windows
 
 ### Multiple Terminals Accessing the Same Session
 * Only one terminal can send keystrokes at a time. If another terminal attaches to the same session via `berth attach`, the previous terminal displays `[detached from …]` and disconnects (the shell keeps running). Keystrokes from multiple terminals will never mix.
-* A read-only option is available (`berth attach -r`). Any number of terminals can attach in read-only mode. Read-only clients do not alter screen dimensions; since screen size is determined by the active typing terminal, smaller read-only screens may experience visual glitches with full-screen apps like `vim` or `htop`.
+* **Any number of viewers** (`berth attach -r`). The typing terminal decides the screen size, so a smaller viewer will see full-screen apps garbled.
 * If a viewer falls behind on output, only that viewer gets dropped (the typing side is never blocked).
-* `-r` requires `berthd` 0.3.0 or later. `berth` will refuse to connect to older daemons (use `berth kill-server` to restart/upgrade).
 
 ---
 
 ## Opening Your Usual Panes All at Once
-
-`berthd` was originally built as a landing zone for the iOS/desktop terminal app `argotty`. Because it lacks a UI, it could embrace any incoming terminal—leaving layout arrangements to the terminal while `berthd` solely retains session lifespans.
 
 Since `berth attach <name>` creates a session if it doesn't exist and connects if it does, the layout-launching script remains identical on both first-time and subsequent runs. Run it in the morning to spin up sessions, or run it again after closing your terminal to jump right back into the same shell.
 
@@ -173,19 +167,12 @@ The exact same session can also be accessed via `berth attach build` from anothe
 
 ---
 
-## Daemon Lifespan
-* `berthd` never terminates on its own (there is no idle timeout). It must be explicitly stopped via `berth kill-server`.
-* If you want `berthd` to run as a persistent background service, `systemd` / `launchd` configurations are available in `dist/README.md`.
-
----
-
 ## Environment Variables
 
 | Variable | Effect |
 | :--- | :--- |
 | `BERTHD_SOCKET` | Path to the socket (default: `$XDG_RUNTIME_DIR/berthd.sock`, falling back to `~/.berth/berthd.sock`). Setting this prevents `berth attach` from auto-spawning a daemon (as it might point to a forwarded socket or external endpoint). |
 | `BERTHD_NO_SPAWN` | When set, prevents `berth attach` from auto-spawning a daemon. Useful to prevent duplicate instances in environments where the daemon is already persistently running. |
-| `BERTHD_BIN` | Path to the `berthd` executable invoked by `berth attach` (default: next to `berth`, then falling back to `PATH`). |
 | `BERTHD_SHELL` | Shell used for sessions (see "How the Session Shell is Decided" below). Effective in both the environment where `berth` is invoked and inside `berthd` itself (the former takes precedence). |
 | `BERTHD_JOURNAL_PATH` | Path to the journal file (default: `~/.berth/journal.jsonl`). |
 | `BERTHD_SESSION` | Session ID passed by `berthd` to its child processes. |
@@ -213,8 +200,6 @@ When creating a new session via `berth attach <name>`, the shell is determined i
 
 On Windows, priorities #4 and #5 do not apply (there is no `/etc/shells`, and git-bash's `$SHELL` uses the MSYS notation `/bin/bash.exe`, which cannot be resolved by Windows process spawning). Use the `-s` / `--shell` option, `BERTHD_SHELL`, or `default-shell` in the configuration file instead.
 
-*(Note: Up to version 0.3.x, the shell was decided solely by the daemon's environment. Because `berth` auto-spawns the daemon if missing, the environment of the terminal that first started it got baked into the daemon, meaning any subsequent `berth attach` from any terminal inherited that exact shell — similar to how launching tmux in a pane forces that daemon's `default-shell` onto everything until it exits).*
-
 ---
 
 ## Configuration File
@@ -234,54 +219,40 @@ CLAUDE_CODE_SHELL = "~/.local/libexec/hsh-as-bash/bash"
 * `[env]` applies **only when a session is created**. Reattaching an existing session does not add anything. A leading `~` or `~/` in a value expands to your home directory; `$VAR` is not expanded.
 * A file that cannot be read — a TOML error, an unknown key, a wrong type — is **not silently ignored**: `berth` prints one line saying so and continues as if there were no file. `berth info` shows the path and whether it was read.
 
-**Why `[env]`:** an AI agent such as Claude Code runs each command in its own shell, chosen by an environment variable (`CLAUDE_CODE_SHELL`), not in the session's shell. With the example above, starting `claude` inside a `berth` session makes its commands run under `hsh` too, so they land in `hsh`'s journal with the agent as the actor — without changing your login shell.
+**Why `[env]`:** an AI agent such as Claude Code runs each command in its own shell, chosen by an environment variable (`CLAUDE_CODE_SHELL`). With the example above, the commands of a `claude` started inside the session run under `hsh` too, and land in its journal.
 
 ---
 
 ## Journal
 
-`berthd` records session creations, attach starts, and exits into `~/.berth/journal.jsonl` using NDJSON ([Rheon Protocol](https://github.com/rheon-protocol/spec) v1 records). No configuration is required. Each line combines observed facts with client self-reporting.
+`berthd` records session creations and attach starts and ends in `~/.berth/journal.jsonl` as NDJSON ([Rheon Protocol](https://github.com/rheon-protocol/spec) v1 records). No configuration is required.
 
-### Event Types (`spawn` / `attach`)
-* `spawn:started`: Logged when a session is spawned, including which shell was used (`shell`), who decided it (`shell_src`), and `cwd`.
-* `spawn:failed`: Logged when a shell fails to spawn, including what was attempted (`shell` / `shell_src`) and why it failed (`reason`, single-line).
-* `attach:start` / `attach:end`: Logged when someone enters or leaves, recording who entered, duration, and how they exited.
-
-`spawn:started` is logged separately because listings only answer "the present" — once a session is destroyed, its original shell would otherwise be lost entirely.
-
-### Record Fields
-
-| Field | Source | Description |
+| Record | When | What it tells you |
 | :--- | :--- | :--- |
-| `peer_uid` / `peer_pid` | Kernel-observed | UID and PID of the connecting process |
-| `peer_auid` | Kernel-observed | Audit UID of the logged-in user (persists across `su` or `sudo`, Linux / macOS) |
-| `peer_ancestry` / `peer_ancestry_src` | Kernel-observed | Ancestry chain (up to 8 levels deep) of the connecting process's parent hierarchy at the moment of attach |
-| `actor` / `actor_src` | Client self-reported | Name claimed by the client and its source (unverified) |
-| `shell` / `shell_src` (spawn events) | Daemon-resolved | Actual executed binary and how it was decided |
-| `read_only` | Daemon-resolved | Whether it was a view-only connection |
-| `how` (exit events) | Daemon-resolved | `exited` (shell finished) / `detached` (disconnected because another terminal took over) / `closed` (manually left / connection closed) / `too_slow` (viewer dropped for failing to keep up with output) |
+| `spawn:started` | A session was spawned | Which shell (`shell`), **who decided it** (`shell_src`), and `cwd` |
+| `spawn:failed` | A shell could not be spawned | What was attempted (`shell` / `shell_src`) and **why it failed** (`reason`) |
+| `attach:start` / `attach:end` | Someone entered / left | Who, for how long, and how they left |
 
-Kernel observations are necessary because both humans and AI agents operate under the same user UID, but self-reporting alone isn't enough (anyone can claim anything). Having both side-by-side lets you instantly verify consistency at a glance. Unnamed attaches leave the `actor` field blank (omission is also a fact; it is not backfilled with the OS username).
+Each line carries both **kernel-observed values** (`peer_uid` / `peer_pid` / `peer_auid` / `peer_ancestry`) and the **client's self-report** (`actor` / `actor_src`, taken from `AUDIT_ACTOR` or `AI_AGENT`, unverified). Humans and AI agents run under the same uid, so observation alone is not enough, and neither is a claim; side by side, a mismatch is readable in one line.
 
-`berth` picks up its actor identity from the environment variables of the process invoking `berth attach` (empty values are ignored):
-1. `AUDIT_ACTOR` — Explicit override if you want to assign a specific actor name (`actor_src` becomes `audit_actor`).
-2. The generic marker an AI agent sets for itself — `AI_AGENT` (`agent`). Vendor-specific markers are not read.
+<details>
+<summary>Field list</summary>
 
-This setting is shell-agnostic (`export AUDIT_ACTOR=…` for bash/zsh, `set -gx AUDIT_ACTOR …` for fish; use `Environment=` in service units if running persistently). It only respects the environment where `berth attach` is run—setting it *inside* the session won't affect that attach record.
+| Field | What | Source |
+| :--- | :--- | :--- |
+| `peer_uid` / `peer_pid` | The connecting process | Kernel |
+| `peer_auid` | Audit uid of the logged-in user (survives `su` / `sudo`; Linux / macOS) | Kernel |
+| `peer_ancestry` / `peer_ancestry_src` | Parent chain of the connecting process at the moment of attach (up to 8), and how far it could be read | Kernel |
+| `actor` / `actor_src` | The name the client claimed and where it came from (`audit_actor` / `agent`) | Self-report (unverified) |
+| `shell` / `shell_src` | The binary actually spawned and who decided it | berthd |
+| `read_only` | Whether it was a view-only connection | berthd |
+| `how` | `exited` (shell finished) / `detached` (taken over) / `closed` (left) / `too_slow` (viewer dropped) | berthd |
 
-Only `actor` / `actor_src` values cannot be independently verified (they remain as reported by the client). Fields prefixed with `peer_` are kernel-audited and independent of claims.
+</details>
 
-### Tracing Which Tool Attached
-🚫 **Do not rely on `actor`** — That is merely "a name chosen by someone for aggregation," and remains blank if left unspecified.
-▶ **Read `peer_ancestry` instead.**
+**To find out which tool attached, read `peer_ancestry`** (`actor` is a name somebody chose, and blank if nobody did). The immediate parent is usually a shell or a terminal (`bash`, `WindowsTerminal.exe`); the tool sits a little deeper. Strip a trailing `.exe`, ignoring case, before comparing. The chain does not stop at `sshd`, so "what launched this" survives SSH.
 
-`berthd` does not inject parent process names into `actor`. Immediate parents are usually shells or terminals (`bash`, `WindowsTerminal.exe`, `pwsh.exe`, etc.), so the actual tool used for attaching sits slightly deeper. Inspect the entire ancestry chain.
-
-⚠️ **Normalization note:** When comparing, ignore case and strip any trailing `.exe` (since the same tool might be recorded as both `claude` and `claude.exe`).
-
-Because ancestry tracing does not stop at `sshd` or similar boundaries, "what launched this" remains fully traceable even across SSH connections.
-
-`berthd` does not record commands typed inside the shell (following a design where byte streams are never intercepted or parsed). Command auditing is the shell's responsibility; if your shell records `BERTHD_SESSION` into its own history logs (e.g., `hsh`'s `session:start`), you can correlate `berthd`'s journal with your shell's logs via the session ID. Since the session ID indicates "descendant of that session," narrow down timestamps using the attach record's start and end times.
+`berthd` does not record the commands typed inside the shell. If the shell records `BERTHD_SESSION` in its own log (for example `hsh`'s `session:start`), the two can be joined on the session id.
 
 ---
 
@@ -289,21 +260,6 @@ Because ancestry tracing does not stop at `sshd` or similar boundaries, "what la
 Sockets are created with `0600`, `~/.berth` with `0700`, and journals with `0600` directly by `berthd` (independent of the launching umask). macOS lacks `XDG_RUNTIME_DIR`, so sockets are placed in `~/.berth`, making these tight restrictions function as built-in security.
 
 On Windows the named pipe (`\\.\pipe\berthd-<user>`) carries an owner-only DACL, and `berth` checks that the process on the other end of the pipe is owned by your account before it says anything; a pipe taken by another user is refused and named. It does not guard against other processes running under your own account.
-
----
-
-## Migrating from Legacy `argod` / `argo`
-As of v0.2.0, the daemon is named `berthd` and the CLI is `berth`. The name `argo` conflicted with the Argo Workflows CLI, causing both to return empty lists without error when installed together. To avoid this ambiguity, no legacy compatibility alias is provided.
-
-```bash
-argo attach build      # Old
-berth attach build     # New
-```
-
-* The installer automatically removes old-named binaries. If you ran it as a persistent service, update your service unit / plist files accordingly (`dist/README.md`).
-* Environment variables have been renamed from `ARGOD_*` to `BERTHD_*`.
-* If you have existing journal logs in `~/.argo/journal.jsonl`, manually move them over to `~/.berth/journal.jsonl`.
-* `~/.argo/config.toml` is not used by `berthd` and can be left as-is.
 
 ---
 
