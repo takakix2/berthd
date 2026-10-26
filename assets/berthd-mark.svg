@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="rope" gradientUnits="userSpaceOnUse" x1="58" y1="62" x2="206" y2="120"><stop offset="0" stop-color="#2f6fd6"/><stop offset="1" stop-color="#7fd7ff"/></linearGradient>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="white"/>
+      <path transform="translate(7,-15)" d="M 134 112 A 36 17 0 0 0 206 112" fill="none" stroke="black" stroke-width="28" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <g mask="url(#cut)">
+    <g transform="translate(7,-15)" fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke="#e8e6e0">
+        <line x1="36" y1="178" x2="204" y2="178"/>
+        <line x1="170" y1="178" x2="170" y2="226"/>
+        <line x1="170" y1="178" x2="170" y2="60"/>
+      </g>
+      <path d="M 134 112 A 36 17 0 0 1 206 112" stroke="url(#rope)"/>
+      <line x1="170" y1="124" x2="170" y2="60" stroke="#e8e6e0"/>
+    </g>
+  </g>
+  <g transform="translate(7,-15)" fill="none" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 134 112 A 36 17 0 0 0 206 112" stroke="url(#rope)"/>
+    <path d="M 134 112 C 118 100 92 80 58 62" stroke="url(#rope)"/>
+  </g>
+</svg>

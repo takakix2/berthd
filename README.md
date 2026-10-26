@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/berthd-mark.svg">
+    <img src="assets/berthd-mark-light.svg" width="160" alt="berthd: a pier, a bollard, and a mooring line looped around it">
+  </picture>
+</p>
+
 # berthd — Shell sessions that survive closures
 
 [日本語](README.ja.md)
