@@ -38,7 +38,7 @@ irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 |
 ```
 
 - 配布物は `.zip` なので、エクスプローラーからダブルクリックで開くこともできます。
-- ⚠️ **Windows ARM64 向けはまだ配っていません。** x64 版をエミュレーションで入れるなら、`-Target windows-x86_64` を付けてください:
+- ⚠️ **Windows ARM64 向けはまだ配っていません。** x64 ビルドをエミュレーションで入れるなら、`-Target windows-x86_64` を付けてください:
   ```powershell
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
   ```
@@ -87,7 +87,7 @@ cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 
 ### どの OS でも
 
-`berth` と `berthd` の版が違うと動かない場合があります。うまく動かないときは `berth info` で両方の版を確かめてください。
+`berth` と `berthd` のバージョンが異なると動かない場合があります。うまく動かないときは `berth info` で両方のバージョンを確認してください。
 
 ## 使い方
 
@@ -108,9 +108,9 @@ berth attach work     # 同じシェルに戻る
 | `berth ls`                                 | 一覧（`*` が今いるセッション）                                                              |
 | `berth rename [<session>] <name>`（`r`）   | 名前を付け直す（省略時は今いるセッション）                                                  |
 | `berth kill <session>`                     | セッションを閉じる（中のシェルごと）                                                        |
-| `berth info`                               | 接続先の berthd（ホストと版）と、**この端末で新しいセッションを作ったら起きるシェル**を表示 |
+| `berth info`                               | 接続先の berthd（ホストとバージョン）と、**この端末で新しいセッションを作ったら起きるシェル**を表示 |
 | `berth kill-server [-f]`                   | berthd を停止する（セッションが残っていれば `-f` が要る）                                   |
-| `berth --version` / `berthd --version`     | 版を表示（デーモンには接続しません）                                                        |
+| `berth --version` / `berthd --version`     | バージョンを表示（デーモンには接続しません）                                                |
 
 `<name>` には名前（`main` など）か id を渡せます。セッションの中では `BERTHD_SESSION` に自分の
 session id が入っているので、`berth ls` の `*` や、引数 1 つの `berth rename <name>` が効きます。
@@ -122,9 +122,9 @@ session id が入っているので、`berth ls` の `*` や、引数 1 つの `
 ホイールや端末の検索・コピーがいつもどおり効きます。全画面アプリ（vim など）の中に居たまま戻った
 ときは履歴を流さず、今の画面だけを描きます。
 
-- **最後の画面だけでよい**（今までの形）: `berth attach --no-scrollback <name>`
+- **最後の画面だけでよい**（従来の動作）: `berth attach --no-scrollback <name>`
 - **ずっと外す**: `BERTH_SCROLLBACK=off`
-- **同じペインで入り直すと続きだけ流します**: ペインごとに安定した ID を出す端末（Windows Terminal・WezTerm・kitty・iTerm2・Apple Terminal・Alacritty）では、`berth` がどこまで見せたかを覚えていて新しい分だけ流すので、同じ履歴が二重に積まれません。ID を出さない端末では、毎回 512 KB をまるごと流す今までの形に落ちます。
+- **同じペインで入り直すと続きだけ流します**: ペインごとに安定した ID を出す端末（Windows Terminal・WezTerm・kitty・iTerm2・Apple Terminal・Alacritty）では、`berth` がどこまで見せたかを覚えていて新しい分だけ流すので、同じ履歴が二重に積まれません。ID を出さない端末では、毎回 512 KB をまるごと流す従来の動作になります。
 
 ### シェルを指定してセッションを作る（`-s` / `--shell`）
 
@@ -138,7 +138,7 @@ berth attach -s powershell.exe win   # Windows でシェルを指定する
 ```
 
 - **新規作成時（セッションが存在しないとき）のみ有効です。** すでに動いている既存セッションに attach する場合は、そのセッションで動いているシェルにそのまま接続します（後からシェルをすり替えることはしません）。
-- **すべての面（Linux / macOS / Windows）で効きます。** 環境変数（`BERTHD_SHELL`）や親プロセスの自動観測よりも最優先（出所: `client:cli_flag`）で解決されます。
+- **すべての OS（Linux / macOS / Windows）で効きます。** 環境変数（`BERTHD_SHELL`）や親プロセスの自動観測よりも最優先（出所: `client:cli_flag`）で解決されます。
 - `-r`（read-only）と組み合わせることもできます（例: `berth attach -s /bin/bash -r monitor`）。
 
 ### 複数の端末から同じセッションに入る
@@ -179,10 +179,10 @@ wezterm cli split-pane --right -- berth attach build
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `BERTHD_SOCKET`       | ソケットの場所（既定は `$XDG_RUNTIME_DIR/berthd.sock`、無ければ `~/.berth/berthd.sock`）。**明示すると `berth attach` は berthd を起こしません**（転送したソケットなど、別の接続先を指している可能性があるため） |
 | `BERTHD_NO_SPAWN`     | 立てると `berth attach` が berthd を起こさなくなる。常駐させている環境で二重起動を防ぐ                                                                                                                           |
-| `BERTHD_SHELL`        | セッションで使うシェル（下記の「セッションのシェルはどう決まるか」）。`berth` を打った環境と berthd 自身の環境の**どちらでも**効きます（前者が先）                                                                                     |
+| `BERTHD_SHELL`        | セッションで使うシェル（下記の「セッションのシェルはどう決まるか」）。`berth` を実行した環境と berthd 自身の環境の**どちらでも**効きます（前者が優先）                                                                               |
 | `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`）                                                                                                                                                                  |
 | `BERTHD_SESSION`      | **berthd が子プロセスに渡す**自分の session id（上記）                                                                                                                                                           |
-| `BERTH_SCROLLBACK`    | `off`（`0` / `no` / `false` も可）で、`berth attach` が出力を端末のスクロールに流すのをやめる（`--no-scrollback` をずっと付けた形）                                                                                   |
+| `BERTH_SCROLLBACK`    | `off`（`0` / `no` / `false` も可）で、`berth attach` が出力を端末のスクロールに流すのをやめる（`--no-scrollback` を常に指定した状態）                                                                             |
 | `AUDIT_ACTOR`         | `berth` が attach のときに名乗る名前（journal の `actor`）。管理者が付ける想定です                                                                                                                       |
 
 ## セッションのシェルはどう決まるか
@@ -191,16 +191,16 @@ wezterm cli split-pane --right -- berth attach build
 
 | 順  | 何を見るか                                                                                       | 出所の呼び名          |
 | --- | ------------------------------------------------------------------------------------------------ | --------------------- |
-| 1   | `--shell <path>` / `-s <path>`（CLI 引数・最優先・**面に依らない**）                              | `client:cli_flag`     |
-| 2   | `BERTHD_SHELL`（`berth` を打った環境・**面に依らない**）                                         | `client:berthd_shell` |
-| 3   | `~/.berth/config.toml` の `default-shell`（[設定ファイル](#設定ファイル)・**面に依らない**）       | `client:config`       |
+| 1   | `--shell <path>` / `-s <path>`（CLI 引数・最優先・**全 OS 共通**）                               | `client:cli_flag`     |
+| 2   | `BERTHD_SHELL`（`berth` を実行した環境・**全 OS 共通**）                                          | `client:berthd_shell` |
+| 3   | `~/.berth/config.toml` の `default-shell`（[設定ファイル](#設定ファイル)・**全 OS 共通**）        | `client:config`       |
 | 4   | **そのとき走っていたシェル**（`berth` の親プロセス。`/etc/shells` に載っているシェルだけ・unix のみ）| `client:parent_shell` |
-| 5   | `$SHELL`（同じく `berth` を打った環境・unix のみ）                                               | `client:env_shell`    |
+| 5   | `$SHELL`（同じく `berth` を実行した環境・unix のみ）                                               | `client:env_shell`    |
 | 6   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/etc/passwd` のログインシェル → `/bin/bash` か `/bin/sh` の在る方 / `powershell.exe`） | `daemon:…`            |
 
 `berth info` がこの端末の答えを表示します。同じ呼び名が journal にも `shell_src` として残ります。
 
-**4 番目が要る理由**: `bash` から `fish` と打って fish に居るとき、`$SHELL` は `/bin/bash` のままです
+**4 番目が要る理由**: `bash` から `fish` と入力して fish に居るとき、`$SHELL` は `/bin/bash` のままです
 （`$SHELL` は「ログインシェルに何を選んだか」の申告値で、いま走っているシェルではありません）。
 そのため、**いま使っているシェルがそのままセッションのシェルになります**。
 
