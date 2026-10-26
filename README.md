@@ -191,7 +191,7 @@ When creating a new session via `berth attach <name>`, the shell is determined i
 | 3 | `default-shell` in `~/.berth/config.toml` (see [Configuration File](#configuration-file), cross-platform) | `client:config` |
 | 4 | The currently running shell (parent process of `berth`, restricted to shells listed in `/etc/shells`, Unix only) | `client:parent_shell` |
 | 5 | `$SHELL` (in the environment where `berth` is invoked, Unix only) | `client:env_shell` |
-| 6 | Fallback defaults on the `berthd` side (`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`) | `daemon:…` |
+| 6 | Fallback defaults on the `berthd` side (`BERTHD_SHELL` → `$SHELL` → the login shell in `/etc/passwd` → `/bin/bash` or `/bin/sh`, whichever exists / `powershell.exe`) | `daemon:…` |
 
 `berth info` displays the resolved answer for your current environment. The same designation is preserved in the journal under `shell_src`.
 
@@ -273,6 +273,8 @@ Because ancestry tracing does not stop at `sshd` or similar boundaries, "what la
 
 ## Permissions
 Sockets are created with `0600`, `~/.berth` with `0700`, and journals with `0600` directly by `berthd` (independent of the launching umask). macOS lacks `XDG_RUNTIME_DIR`, so sockets are placed in `~/.berth`, making these tight restrictions function as built-in security.
+
+On Windows the named pipe (`\\.\pipe\berthd-<user>`) carries an owner-only DACL, and `berth` checks that the process on the other end of the pipe is owned by your account before it says anything; a pipe taken by another user is refused and named. It does not guard against other processes running under your own account.
 
 ---
 

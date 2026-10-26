@@ -217,7 +217,7 @@ wezterm cli split-pane --right -- berth attach build
 | 3   | `~/.berth/config.toml` の `default-shell`（[設定ファイル](#設定ファイル)・**面に依らない**）       | `client:config`       |
 | 4   | **そのとき走っていたシェル**（`berth` の親プロセス。`/etc/shells` に載っているシェルだけ・unix のみ）| `client:parent_shell` |
 | 5   | `$SHELL`（同じく `berth` を打った環境・unix のみ）                                               | `client:env_shell`    |
-| 6   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/bin/bash` / `powershell.exe`） | `daemon:…`            |
+| 6   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/etc/passwd` のログインシェル → `/bin/bash` か `/bin/sh` の在る方 / `powershell.exe`） | `daemon:…`            |
 
 `berth info` がこの端末の答えを表示します。同じ呼び名が journal にも `shell_src` として残ります。
 
@@ -323,6 +323,10 @@ session id が示すのは「そのセッションの子孫である」ことな
 ソケットは `0600`、`~/.berth` は `0700`、journal は `0600` で berthd 自身が作ります（起動元の umask に
 依存しません）。macOS には `XDG_RUNTIME_DIR` が無く、ソケットは `~/.berth` に置かれるため、
 この締め付けがそのまま防御になります。
+
+Windows の名前付きパイプ（`\\.\pipe\berthd-<user>`）には所有者だけの DACL が付き、`berth` は繋いだ先の
+プロセスが自分のアカウントの物かを握手の前に確かめます（他のユーザーに取られていれば、相手を名指しして断ります）。
+同じアカウントで走る別のプロセスからは守りません。
 
 ## 旧 `argod` / `argo` から乗り換える
 
