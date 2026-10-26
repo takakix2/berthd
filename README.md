@@ -9,18 +9,20 @@
 
 [日本語](README.ja.md)
 
-`berthd` is a lightweight daemon that owns a PTY. By decoupling the shell's lifespan from your terminal emulator app, your shell keeps running even if you close the app, allowing you to reconnect to the exact same session—complete with its scrollback buffer—later. 
+**Windows Terminal, plus the one thing `tmux` would have given you: sessions that outlive the window.**
 
-Like `tmux`, it provides session persistence, but it is **headless**. It does no rendering; terminal emulation is entirely handled by your client, so you can use whatever terminal you prefer.
+Windows Terminal already has tabs and split panes. What it does not have is persistence: close the window and every shell in it is gone. `berthd` adds exactly that, natively on Windows — no WSL, no Cygwin, two `.exe` files. Run `berth attach claude`, start Claude Code inside, close the window at the end of the day; tomorrow `berth attach claude` brings the same session back, past output and all, into Windows Terminal's own scrollback.
 
-The lack of a UI is intentional. Window splitting and tabs (multiplexing) are the job of your terminal app, not `berthd`. Instead, you can create as many sessions as you like—open two panes, run `berth attach a` and `berth attach b` in each, and both will keep running even after you close their respective terminals. Because it has no UI, it can live inside any pane of any terminal (tmux panes, terminal app tabs/splits, or over SSH).
+Under the hood it is a small daemon that owns the PTY, so the shell's lifetime belongs to the daemon rather than to the terminal app. Like `tmux` it keeps sessions alive, but it is **headless**: no rendering, no splitting, no tabs — those stay with your terminal. It lives inside any pane of any terminal (Windows Terminal, tmux panes, tabs and splits, over SSH), and the same two binaries run on Linux and macOS.
 
-The companion CLI `berth` is used to manage sessions and works from any shell.
+What it does not do: survive a logout or a reboot. That is the same line `tmux` draws. "Close the window" is the promise; "turn off the machine" is not.
+
+The companion CLI `berth` manages sessions from any shell.
 
 ```bash
 $ berth ls
-- mywork  zsh   106x29  ~/src/app
-  build   zsh   120x40  ~/src/lib
+- claude  pwsh  120x40  C:\src\app
+  build   pwsh  120x40  C:\src\lib
 ```
 
 ---
