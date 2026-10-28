@@ -11,13 +11,15 @@
 
 **Close the window. The shell keeps running.**
 
-Under the hood it is a small daemon that owns the PTY, so the shell's lifetime belongs to the daemon rather than to the terminal app. Like `tmux` it keeps sessions alive, but it is **headless**: it stays small by leaving panes and tabs, and all the drawing, to your terminal. It works in any terminal (Windows Terminal, Ghostty, Alacritty, …), and inside tmux panes, tabs and splits, and over SSH. Two binaries get installed: `berth` and `berthd`. It is tested on Windows, Linux and macOS.
+`berthd` is a lightweight, headless daemon that manages and persists pseudoterminals (PTYs). By decoupling the shell's process lifecycle from the terminal emulator, sessions remain persistent across client disconnects. While achieving session persistence similar to `tmux`, `berthd` adopts a headless design—leaving pane splitting, tabs, and all UI rendering to your native terminal emulator. It operates seamlessly across any terminal (Windows Terminal, Ghostty, Alacritty, etc.), inside tmux panes or splits, and over SSH.
 
-`berth` is the CLI that manages sessions.
+The package installs two binaries: the daemon `berthd` and the CLI client `berth` (cross-platform support for Windows, Linux, and macOS).
+
+**`berth`** is the CLI used to manage and attach to sessions.
 
 ```bash
 $ berth ls
-- claude  pwsh  120x40  C:\src\app
+* claude  pwsh  120x40  C:\src\app
   build   pwsh  120x40  C:\src\lib
 ```
 
@@ -25,26 +27,27 @@ $ berth ls
 
 ## Installation
 
-The installer downloads the latest release, verifies it against `SHA256SUMS`, and puts `berthd` and `berth` in `~/.local/bin` (override with `BERTHD_INSTALL_DIR`).
-When updating, stop the daemon first with `berth kill-server`; the installer aborts if sessions are still running.
+The installer downloads the latest release binary, verifies the checksum against `SHA256SUMS`, and installs `berthd` and `berth` to `~/.local/bin` (configurable via `BERTHD_INSTALL_DIR`).
+
+When updating or reinstalling, stop the daemon first using `berth kill-server` (the update aborts if active sessions are running).
 
 ### Windows
 
-In PowerShell:
+Run in PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 ```
 
-* The distribution is a `.zip` archive, so you can also open it from Explorer by double-clicking.
-* **⚠️ No Windows ARM64 build yet.** To install the x64 build under emulation, pass `-Target windows-x86_64`:
+- Distributed as a `.zip` archive. Can also be extracted and installed manually via File Explorer.
+- **Windows ARM64 binaries are currently not provided.** To install the x64 binary under emulation, specify `-Target windows-x86_64`:
   ```powershell
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
   ```
-* To keep the daemon running across logons, use a Task Scheduler logon trigger (no administrator rights needed). See [dist/README.md](dist/README.md).
-* When updating from inside `berth attach`, the in-use `.exe` is moved aside first. The `*.exe.old` cannot be deleted until that process exits; the next install cleans it up.
+- To run the daemon persistently as a service across logons, use Task Scheduler with a logon trigger (no administrator rights required). See [dist/README.md](dist/README.md).
+- When reinstalling from inside an active `berth attach` session, the installer temporarily renames the in-use binaries (the renamed `*.exe.old` files are automatically cleaned up during the next installation after process termination).
 
-Manual install (built-in tools only):
+Manual installation steps:
 
 ```powershell
 curl.exe -fsSL -o berthd.zip https://github.com/takakix2/berthd/releases/latest/download/berthd-windows-x86_64.zip
@@ -58,10 +61,10 @@ Move-Item berthd-*\berth*.exe $env:USERPROFILE\.local\bin\ -Force
 curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
 ```
 
-* The build is x86_64.
-* To keep the daemon running, use the systemd user service. See [dist/README.md](dist/README.md).
+- Target architecture: x86_64
+- For persistent daemon operation (systemd user service), see [dist/README.md](dist/README.md).
 
-Manual install:
+Manual installation steps:
 
 ```bash
 curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz
@@ -74,29 +77,29 @@ cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
 ```
 
-* The build is Apple Silicon (arm64).
-* To keep the daemon running, use the launchd LaunchAgent. See [dist/README.md](dist/README.md).
+- Target architecture: Apple Silicon (arm64)
+- For persistent daemon operation (launchd LaunchAgent), see [dist/README.md](dist/README.md).
 
-Manual install:
+Manual installation steps:
 
 ```bash
 curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-macos-arm64.tar.gz | tar xz
 cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 ```
 
-### On every OS
+### Version Compatibility
 
-Mismatched versions of `berth` and `berthd` may misbehave. If something is off, check both versions with `berth info`.
+Mismatched versions between the client (`berth`) and daemon (`berthd`) may lead to protocol inconsistencies. If unexpected behavior occurs, verify both versions using `berth info`.
 
 ---
 
 ## Usage
 
 ```bash
-berth attach work     # Enter session 'work' (creates it if missing, spawns berthd if not running)
-# … work happens …
-berth d               # Detach from the session (the shell keeps running under berthd)
-berth attach work     # Reconnect to the same shell
+berth attach work     # Attach to session 'work' (creates if missing, auto-spawns daemon if not running)
+# … work …
+berth d               # Detach from session (shell continues running in the background)
+berth attach work     # Reattach to the same session
 ```
 
 ---
@@ -105,163 +108,170 @@ berth attach work     # Reconnect to the same shell
 
 | Command | Description |
 | :--- | :--- |
-| `berth attach [<name>]` (or `a`) | Enter the session in this terminal (creates one if it doesn't exist) |
-| `berth attach -s <shell> [<name>]` | Create a session with a specific shell (`-s` / `--shell`) |
-| `berth attach -r <name>` | View-only attach (does not send keystrokes or resize the screen; press `q` or `Ctrl-C` to exit) |
-| `berth attach --no-scrollback [<name>]` | Restore only the last screen (by default the session's past output is replayed into this terminal's own scrollback first; see below) |
-| `berth detach [<name>]` (or `d`) | Detach from the session (defaults to current session; disconnects all viewers including the terminal screen) |
-| `berth ls` | List sessions (`*` indicates your current session) |
-| `berth rename [<session>] <name>` (or `r`) | Rename a session (defaults to current session) |
-| `berth kill <session>` | Close a session (along with its inner shell) |
-| `berth info` | Display connection info for `berthd` (host & version) and the shell that would be spawned for a new session |
-| `berth kill-server [-f]` | Stop `berthd` (requires `-f` if active sessions remain) |
-| `berth --version` / `berthd --version` | Display version (does not connect to the daemon) |
+| `berth attach [<name>]` (`a`) | Attach to a session in the current terminal (creates new session if not present) |
+| `berth attach -s <shell> [<name>]` | Create and attach to a new session with a specified shell (`-s` / `--shell`) |
+| `berth attach -r <name>` | Attach in read-only mode (keystrokes and resize disabled; exit with `q` or `Ctrl-C`) |
+| `berth attach --no-scrollback [<name>]` | Skip scrollback replay and restore only the current screen state (see below) |
+| `berth detach [<name>]` (`d`) | Detach from session (defaults to current session; disconnects all attached clients) |
+| `berth ls` | List active sessions (`*` marks the current session) |
+| `berth rename [<session>] <name>` (`r`) | Rename a session (defaults to current session) |
+| `berth kill <session>` | Terminate a session (including child shell processes) |
+| `berth info` | Display daemon connection info (host & version) and the resolved shell for new sessions |
+| `berth kill-server [-f]` | Stop the `berthd` daemon (requires `-f` if active sessions remain) |
+| `berth --version` / `berthd --version` | Display version information (does not connect to daemon) |
 
-`<name>` accepts either a session name (e.g., `main`) or an ID. Inside a session, `BERTHD_SESSION` holds your session ID, making shortcuts like `berth ls` (* marker) and single-argument `berth rename <name>` work smoothly.
+`<name>` accepts a session name (e.g. `main`) or a session ID. Inside a session, the environment variable `BERTHD_SESSION` holds the current session ID, enabling context-aware commands like `berth ls` (the `*` indicator) and parameter-free `berth rename <name>` or `berth detach`.
 
-### Reattaching Brings Back the Session's Output in Your Terminal's Own Scrollback (Default)
+### Scrollback Buffer Replay on Reattach (Default)
 
-When you `berth attach` to an existing session, its past output (the most recent 512 KB) is replayed into **your terminal's own scrollback buffer** before the current screen is redrawn. Nothing is confined to a separate screen the way tmux does it, so mouse-wheel scrolling, search, and copy work exactly as they normally do. If the session was left inside a full-screen app (such as `vim`), the history is not replayed and only the current screen is drawn.
+When reattaching via `berth attach`, the session's recent output history (up to 512 KB) is replayed directly into the terminal emulator's native scrollback buffer before redrawing the current screen. Because output is not trapped inside an alternate screen or virtual terminal multiplexer, native mouse-wheel scrolling, text selection, copy, and search functions remain fully available. If reattaching while a full-screen alternate-screen application (such as `vim`) is running, history replay is skipped and only the current screen is redrawn.
 
-* **Only the last screen** (the previous behavior): `berth attach --no-scrollback <name>`
-* **Always off**: `BERTH_SCROLLBACK=off`
-* **Reattaching the same pane resumes only the tail:** on terminals that give each pane a stable id (Windows Terminal, WezTerm, kitty, iTerm2, Apple Terminal, Alacritty), `berth` remembers how far it already showed and replays only what is new, so the history is not appended twice. On terminals that expose no pane id, it falls back to replaying the whole 512 KB each time.
+- **Restore current screen only**: `berth attach --no-scrollback <name>`
+- **Disable scrollback replay globally**: `BERTH_SCROLLBACK=off`
+- **Differential scrollback replay**: On terminal emulators that provide stable pane identifiers (Windows Terminal, WezTerm, kitty, iTerm2, Apple Terminal, Alacritty), `berth` tracks displayed output and replays only unseen differential history upon reattach to the same pane, preventing duplicate lines. Terminals without stable pane identifiers replay the entire 512 KB buffer.
 
-### Specifying a Shell for a New Session (`-s` / `--shell`)
-You can ad-hoc specify which shell to launch when creating a new session using `-s <shell>`, `--shell <shell>`, or `--shell=<shell>`:
+### Specifying the Shell for New Sessions (`-s` / `--shell`)
+
+When creating a new session, the shell executable can be explicitly specified using `-s <shell>`, `--shell <shell>`, or `--shell=<shell>`:
 
 ```bash
-berth attach -s /bin/bash debug      # Launch only this session with bash
+berth attach -s /bin/bash debug      # Launch this session specifically with bash
 berth attach -s hsh work             # Create a new session with hsh
 berth attach -s powershell.exe win   # Specify a shell on Windows
 ```
 
-* Only applies when creating a new session (when it does not already exist). If attaching to an already running session, you connect to the shell currently active inside it (shells are not swapped on-the-fly).
-* Works across all platforms (Linux / macOS / Windows). Takes the absolute highest priority over environment variables (`BERTHD_SHELL`) or automatic parent process detection (`client:cli_flag`).
-* Can be combined with `-r` (read-only), e.g., `berth attach -s /bin/bash -r monitor`.
+- **Applies to new sessions only**: When attaching to an existing session, the client connects to the currently running shell process (dynamic shell replacement is not performed).
+- **Cross-platform**: Takes highest precedence across all supported operating systems over `BERTHD_SHELL` and parent process detection (source tag: `client:cli_flag`).
+- Can be combined with `-r` (read-only mode), e.g., `berth attach -s /bin/bash -r monitor`.
 
-### Multiple Terminals Accessing the Same Session
-* Only one terminal can send keystrokes at a time. If another terminal attaches to the same session via `berth attach`, the previous terminal displays `[detached from …]` and disconnects (the shell keeps running). Keystrokes from multiple terminals will never mix.
-* **Any number of viewers** (`berth attach -r`). The typing terminal decides the screen size, so a smaller viewer will see full-screen apps garbled.
-* If a viewer falls behind on output, only that viewer gets dropped (the typing side is never blocked).
+### Multi-Client Connections
+
+- **Exclusive control for interactive client**: Only one client may send keyboard input (write) to a session at any given time. If another client connects via `berth attach`, the preceding interactive client is automatically detached (displaying `[detached from …]`), preventing input collision and corruption while the underlying shell continues uninterrupted.
+- **Concurrent read-only clients**: Multiple viewers may attach simultaneously using `-r`. Because terminal window dimensions follow the active interactive client, full-screen applications may appear misaligned if a viewer terminal is smaller than the primary client.
+- **Automatic drop for lagging viewers**: If a read-only client's buffer fills due to rendering latency, only the lagging viewer is dropped, ensuring the primary interactive client is never blocked.
 
 ---
 
-## Opening Your Usual Panes All at Once
+## Restoring Terminal Layouts
 
-Since `berth attach <name>` creates a session if it doesn't exist and connects if it does, the layout-launching script remains identical on both first-time and subsequent runs. Run it in the morning to spin up sessions, or run it again after closing your terminal to jump right back into the same shell.
+Because `berth attach <name>` transparently handles both session creation and reconnection, terminal layout automation scripts can be reused identically for both initial startup and session resumption:
 
 **Windows Terminal (from PowerShell):**
+
 ```powershell
 wt new-tab --title dev berth attach dev `; split-pane -V berth attach build `; split-pane -H berth attach logs
 ```
-⚠️ PowerShell consumes `;` as its own delimiter, so write it as `` `; `` when passing it to `wt` (a plain `;` works from `cmd`).
 
-**WezTerm (from a shell inside WezTerm):**
+*Note: In PowerShell, the semicolon is a command separator; escape it with a backtick (``` `; ```) when passing arguments to `wt` (escaping is not required from `cmd.exe`).*
+
+**WezTerm (from a shell within WezTerm):**
+
 ```bash
 wezterm cli spawn -- berth attach dev
 wezterm cli split-pane --right -- berth attach build
 ```
 
-The exact same session can also be accessed via `berth attach build` from another terminal or over SSH.
+The resulting sessions can also be attached independently from separate terminals or over SSH using `berth attach build`.
 
 ---
 
 ## Environment Variables
 
-| Variable | Effect |
+| Variable | Description |
 | :--- | :--- |
-| `BERTHD_SOCKET` | Path to the socket (default: `$XDG_RUNTIME_DIR/berthd.sock`, falling back to `~/.berth/berthd.sock`). Setting this prevents `berth attach` from auto-spawning a daemon (as it might point to a forwarded socket or external endpoint). |
-| `BERTHD_NO_SPAWN` | When set, prevents `berth attach` from auto-spawning a daemon. Useful to prevent duplicate instances in environments where the daemon is already persistently running. |
-| `BERTHD_SHELL` | Shell used for sessions (see "How the Session Shell is Decided" below). Effective in both the environment where `berth` is invoked and inside `berthd` itself (the former takes precedence). |
-| `BERTHD_JOURNAL_PATH` | Path to the journal file (default: `~/.berth/journal.jsonl`). |
-| `BERTHD_SESSION` | Session ID passed by `berthd` to its child processes. |
-| `BERTH_SCROLLBACK` | Set to `off` (`0` / `no` / `false` also work) to stop `berth attach` from replaying output into the terminal's scrollback (same as always passing `--no-scrollback`). |
-| `AUDIT_ACTOR` | Name claimed by `berth` upon attach (recorded in the journal's `actor` field). Intended for administrative labeling. |
+| `BERTHD_SOCKET` | Path to the UNIX domain socket (default: `$XDG_RUNTIME_DIR/berthd.sock`, falling back to `~/.berth/berthd.sock`). **When explicitly specified, `berth attach` will not auto-spawn a daemon** (to accommodate forwarded or remote sockets). |
+| `BERTHD_NO_SPAWN` | When set to `1`, disables on-demand daemon spawning by `berth attach`. Recommended for persistent service deployments to prevent duplicate instances during transient restarts. |
+| `BERTHD_SHELL` | Shell executable to spawn for new sessions (see "Shell Resolution Order" below). Recognized in both client and daemon environments, with client-side setting taking precedence. |
+| `BERTHD_JOURNAL_PATH` | Path to the audit journal file (default: `~/.berth/journal.jsonl`). |
+| `BERTHD_SESSION` | Session ID injected into child shell processes by `berthd`. |
+| `BERTH_SCROLLBACK` | Set to `off` (`0`, `no`, or `false`) to disable scrollback replay upon attach (equivalent to always passing `--no-scrollback`). |
+| `AUDIT_ACTOR` | Actor identity claimed by `berth` on attach (recorded in the journal's `actor` field). Intended for administrative labeling and audit tooling. |
 
 ---
 
-## How the Session Shell is Decided
+## Shell Resolution Order
 
-When creating a new session via `berth attach <name>`, the shell is determined in the following priority order:
+When creating a new session via `berth attach <name>`, the shell executable is resolved using the following precedence:
 
-| Priority | Source | Designation |
+| Priority | Source | Source Identifier |
 | :---: | :--- | :--- |
 | 1 | `--shell <path>` / `-s <path>` (CLI argument — highest priority, cross-platform) | `client:cli_flag` |
-| 2 | `BERTHD_SHELL` (environment where `berth` is invoked, cross-platform) | `client:berthd_shell` |
+| 2 | `BERTHD_SHELL` (environment variable in client execution context, cross-platform) | `client:berthd_shell` |
 | 3 | `default-shell` in `~/.berth/config.toml` (see [Configuration File](#configuration-file), cross-platform) | `client:config` |
-| 4 | The currently running shell (parent process of `berth`, restricted to shells listed in `/etc/shells`, Unix only) | `client:parent_shell` |
-| 5 | `$SHELL` (in the environment where `berth` is invoked, Unix only) | `client:env_shell` |
-| 6 | Fallback defaults on the `berthd` side (`BERTHD_SHELL` → `$SHELL` → the login shell in `/etc/passwd` → `/bin/bash` or `/bin/sh`, whichever exists / `powershell.exe`) | `daemon:…` |
+| 4 | Parent process shell (`berth` invoker process, restricted to shells in `/etc/shells`, Unix only) | `client:parent_shell` |
+| 5 | `$SHELL` (environment variable in client execution context, Unix only) | `client:env_shell` |
+| 6 | Daemon-side fallback defaults (`BERTHD_SHELL` → `$SHELL` → `/etc/passwd` login shell → `/bin/bash` or `/bin/sh` / Windows: `powershell.exe`) | `daemon:…` |
 
-`berth info` displays the resolved answer for your current environment. The same designation is preserved in the journal under `shell_src`.
+Run `berth info` to inspect the resolved shell for your current environment (the resolved identifier is also preserved in the journal under `shell_src`).
 
-**Why priority #4 is necessary:** If you run `fish` from `bash` and find yourself inside `fish`, `$SHELL` remains `/bin/bash` (because `$SHELL` declares your chosen login shell, not necessarily what's running right now). Consequently, the currently active shell is inherited for the session.
+**Parent Process Detection Context**: When invoking `fish` or `zsh` from within `bash`, `$SHELL` continues to report the login shell (`/bin/bash`). By examining the parent process hierarchy, `berth` inherits the interactive shell currently in use.
 
-On Windows, priorities #4 and #5 do not apply (there is no `/etc/shells`, and git-bash's `$SHELL` uses the MSYS notation `/bin/bash.exe`, which cannot be resolved by Windows process spawning). Use the `-s` / `--shell` option, `BERTHD_SHELL`, or `default-shell` in the configuration file instead.
+**Windows Limitations**: On Windows, `/etc/shells` does not exist, and MSYS-style `$SHELL` values (e.g. `/bin/bash.exe` from Git Bash) cannot be resolved by standard Windows process creation. Consequently, parent detection (4) and `$SHELL` evaluation (5) are disabled. Use `-s / --shell`, `BERTHD_SHELL`, or `default-shell` in the configuration file instead.
 
 ---
 
 ## Configuration File
 
-`berth` reads `~/.berth/config.toml` (the same directory as the journal and the pane files, on every OS). Set `BERTH_CONFIG=<path>` to read a different file. The file is optional.
+`berth` reads configuration from `~/.berth/config.toml` (stored alongside the journal and pane cache, across all platforms). Override the path via `BERTH_CONFIG=<path>`. The configuration file is optional.
 
 ```toml
-# The shell for new sessions (same as typing `berth attach -s hsh` every time).
+# Default shell for new sessions (equivalent to passing -s hsh on every attach)
 default-shell = "hsh"
 
-# Environment variables added to new sessions only.
+# Environment variables injected into new sessions
 [env]
 CLAUDE_CODE_SHELL = "~/.local/libexec/hsh-as-bash/bash"
 ```
 
-* `default-shell` ranks below `-s` and `BERTHD_SHELL` and above the detected shell (see [How the Session Shell is Decided](#how-the-session-shell-is-decided)). The journal records it as `client:config`.
-* `[env]` applies **only when a session is created**. Reattaching an existing session does not add anything. A leading `~` or `~/` in a value expands to your home directory; `$VAR` is not expanded.
-* A file that cannot be read — a TOML error, an unknown key, a wrong type — is **not silently ignored**: `berth` prints one line saying so and continues as if there were no file. `berth info` shows the path and whether it was read.
+- `default-shell`: Precedes parent shell detection, but yields to explicit CLI flags (`-s`) and `BERTHD_SHELL` (recorded as `client:config` in the journal).
+- `[env]`: Injects environment variables exclusively during session initialization (not applied during subsequent reattaches). Leading `~` or `~/` is expanded to the user's home directory (`$VAR` interpolation is not supported).
+- **Error Handling**: Syntax errors or unknown keys in the configuration file produce a warning on stderr and fallback to default behavior (path and load status can be inspected with `berth info`).
 
-**Why `[env]`:** an AI agent such as Claude Code runs each command in its own shell, chosen by an environment variable (`CLAUDE_CODE_SHELL`). With the example above, the commands of a `claude` started inside the session run under `hsh` too, and land in its journal.
+**Use Case (AI Coding Agent Integration)**: AI coding agents such as Claude Code launch subshells using environment variables (e.g. `CLAUDE_CODE_SHELL`). Defining variables under `[env]` ensures agent-invoked subshells run under audited shell environments (such as `hsh`) and are tracked in audit journals.
 
 ---
 
-## Journal
+## Audit Journal
 
-`berthd` records session creations and attach starts and ends in `~/.berth/journal.jsonl` as NDJSON ([Rheon Protocol](https://github.com/rheon-protocol/spec) v1 records). No configuration is required.
+`berthd` automatically logs session lifecycle events and client attach/detach activity to `~/.berth/journal.jsonl` in NDJSON format ([Rheon Protocol](https://github.com/rheon-protocol/spec) v1 records, requiring no additional configuration).
 
-| Record | When | What it tells you |
+| Event Type | Trigger | Logged Information |
 | :--- | :--- | :--- |
-| `spawn:started` | A session was spawned | Which shell (`shell`), **who decided it** (`shell_src`), and `cwd` |
-| `spawn:failed` | A shell could not be spawned | What was attempted (`shell` / `shell_src`) and **why it failed** (`reason`) |
-| `attach:start` / `attach:end` | Someone entered / left | Who, for how long, and how they left |
+| `spawn:started` | Session created | Target shell (`shell`), resolution source (`shell_src`), working directory (`cwd`) |
+| `spawn:failed` | Shell spawn failed | Attempted shell (`shell` / `shell_src`), failure reason (`reason`) |
+| `attach:start` / `attach:end` | Client connected / disconnected | Connecting process attributes, session duration, exit reason (`how`) |
 
-Each line carries both **kernel-observed values** (`peer_uid` / `peer_pid` / `peer_auid` / `peer_ancestry`) and the **client's self-report** (`actor` / `actor_src`, taken from `AUDIT_ACTOR` or `AI_AGENT`, unverified). Humans and AI agents run under the same uid, so observation alone is not enough, and neither is a claim; side by side, a mismatch is readable in one line.
+Each log entry records both **kernel-observed process attributes** (`peer_uid`, `peer_pid`, `peer_auid`, `peer_ancestry`) and **client-reported identity metadata** (`actor`, `actor_src`, retrieved from `AUDIT_ACTOR` or `AI_AGENT`, unverified). In environments where human developers and autonomous AI agents operate under identical UID privileges, dual-layer logging enables reconciliation between OS-level provenance and application claims.
 
 <details>
-<summary>Field list</summary>
+<summary>Field Reference</summary>
 
-| Field | What | Source |
+| Field | Description | Source |
 | :--- | :--- | :--- |
-| `peer_uid` / `peer_pid` | The connecting process | Kernel |
-| `peer_auid` | Audit uid of the logged-in user (survives `su` / `sudo`; Linux / macOS) | Kernel |
-| `peer_ancestry` / `peer_ancestry_src` | Parent chain of the connecting process at the moment of attach (up to 8), and how far it could be read | Kernel |
-| `actor` / `actor_src` | The name the client claimed and where it came from (`audit_actor` / `agent`) | Self-report (unverified) |
-| `shell` / `shell_src` | The binary actually spawned and who decided it | berthd |
-| `read_only` | Whether it was a view-only connection | berthd |
-| `how` | `exited` (shell finished) / `detached` (taken over) / `closed` (left) / `too_slow` (viewer dropped) | berthd |
+| `peer_uid` / `peer_pid` | Connecting client process UID / PID | Kernel observation |
+| `peer_auid` | Login audit UID (immutable across `su` / `sudo`; Linux / macOS) | Kernel observation |
+| `peer_ancestry` / `peer_ancestry_src` | Process hierarchy of connecting client (up to 8 levels) and extraction status | Kernel observation |
+| `actor` / `actor_src` | Client-claimed identity and retrieval origin (`audit_actor` / `agent`) | Client report (unverified) |
+| `shell` / `shell_src` | Executed shell binary path and resolution origin | berthd |
+| `read_only` | Boolean flag indicating read-only viewer attachment | berthd |
+| `how` | Disconnection cause: `exited` (shell terminated) / `detached` (preempted by new client) / `closed` (normal detach) / `too_slow` (dropped due to render lag) | berthd |
 
 </details>
 
-**To find out which tool attached, read `peer_ancestry`** (`actor` is a name somebody chose, and blank if nobody did). The immediate parent is usually a shell or a terminal (`bash`, `WindowsTerminal.exe`); the tool sits a little deeper. Strip a trailing `.exe`, ignoring case, before comparing. The chain does not stop at `sshd`, so "what launched this" survives SSH.
+**Tracking Attachment Provenance**: To determine which application or wrapper initiated an attach, inspect `peer_ancestry` (the `actor` field is unpopulated unless explicitly supplied). Direct parents are typically shells or terminal wrappers (`bash`, `WindowsTerminal.exe`), while invoking developer tools appear higher in the process hierarchy (compare `.exe` suffixes case-insensitively on Windows). Because process tree traversal extends beyond `sshd`, invocation origins are preserved over SSH connections.
 
-`berthd` does not record the commands typed inside the shell. If the shell records `BERTHD_SESSION` in its own log (for example `hsh`'s `session:start`), the two can be joined on the session id.
+Individual commands executed inside the shell are not captured by `berthd`. When shells record `BERTHD_SESSION` within their own audit logging (e.g. `hsh`'s `session:start`), daemon events and command-level records can be cross-referenced using the session ID.
 
 ---
 
-## Permissions
-Sockets are created with `0600`, `~/.berth` with `0700`, and journals with `0600` directly by `berthd` (independent of the launching umask). macOS lacks `XDG_RUNTIME_DIR`, so sockets are placed in `~/.berth`, making these tight restrictions function as built-in security.
+## Security Model and Permissions
 
-On Windows the named pipe (`\\.\pipe\berthd-<user>`) carries an owner-only DACL, and `berth` checks that the process on the other end of the pipe is owned by your account before it says anything; a pipe taken by another user is refused and named. It does not guard against other processes running under your own account.
+UNIX domain sockets are created with mode `0600`, directory `~/.berth` with mode `0700`, and journal files with mode `0600` directly by `berthd` (independent of the caller's umask). On macOS, where `XDG_RUNTIME_DIR` is unavailable, sockets reside within `~/.berth` and rely on directory permissions for isolation.
+
+On Windows, the named pipe (`\\.\pipe\berthd-<user>`) is guarded by an owner-only DACL, and `berth` verifies that the server process SID matches the calling user account before exchanging protocol frames (preventing named-pipe squatting by other users). Isolation between distinct processes executing under the same user credentials is not in scope.
 
 ---
 
 ## License
-ISC (`LICENSE`). Third-party notices and attributions are listed in `THIRD-PARTY-NOTICES.md`.
+
+ISC License ([LICENSE](LICENSE)). Third-party library licenses and attributions are documented in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
