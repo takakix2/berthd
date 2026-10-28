@@ -11,10 +11,9 @@
 
 **ウィンドウを閉じても、シェルが動き続けます。**
 
-中身は **PTY を所有する小さなデーモン**です。シェルの寿命が端末アプリではなくデーモンの物になるので、
-アプリを閉じてもシェルは動き続けます。セッションを生かし続けるという意味では tmux と同じですが、**ヘッドレス**です。
-ペインやタブの描画を端末の仕事とすることで、小ささを保っています。どのターミナルでも動きます（Windows Terminal、Ghostty、Alacritty など）。
-tmux のペイン、タブや分割、ssh の中でも動きます。`berth` と `berthd` の 2 本のバイナリがインストールされます。Windows・Linux・macOS で動作確認をしています。
+`berthd` は、疑似端末（PTY）を保持・管理する軽量なヘッドレスデーモンです。シェルのプロセスライフサイクルをターミナルエミュレータから切り離し、デーモン側で永続化します。tmux のようにセッションを維持しながらも、ペイン分割やタブ描画などの UI レンダリングを行わないヘッドレス設計を採用しています。Windows Terminal、Ghostty、Alacritty など任意のターミナルエミュレータ、tmux のペイン内、あるいは SSH セッション越しでもシームレスに動作します。
+
+パッケージには、デーモン本体の `berthd` と、セッション操作用 CLI ツール `berth` の 2 つのバイナリが含まれます（Windows / Linux / macOS クロスプラットフォーム対応）。
 
 **`berth`** がセッションを操作する CLI です。
 
@@ -26,26 +25,27 @@ $ berth ls
 
 ## インストール
 
-インストーラーは最新のリリースをダウンロードして `SHA256SUMS` で検算し、`berthd` と `berth` を `~/.local/bin` に置きます（`BERTHD_INSTALL_DIR` で変更できます）。
-入れ直すときは先に `berth kill-server` でデーモンを止めてください。セッションが残っていると中断します。
+インストーラーは最新のリリースバイナリをダウンロードして `SHA256SUMS` でチェックサムを検証し、`berthd` と `berth` を `~/.local/bin` に配置します（配置先は `BERTHD_INSTALL_DIR` で変更可能です）。
+
+再インストール時は、事前に `berth kill-server` でデーモンを停止してください（実行中のセッションが存在する場合は停止処理が中断されます）。
 
 ### Windows
 
-PowerShell で:
+PowerShell で実行:
 
 ```powershell
 irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 ```
 
-- 配布物は `.zip` なので、エクスプローラーからダブルクリックで開くこともできます。
-- ⚠️ **Windows ARM64 向けはまだ配っていません。** x64 ビルドをエミュレーションで入れるなら、`-Target windows-x86_64` を付けてください:
+- 配布物は `.zip` 形式です。エクスプローラー等で展開して配置することも可能です。
+- **Windows ARM64 向けバイナリは未提供です。** x64 エミュレーション環境でインストールする場合は、`-Target windows-x86_64` を指定してください:
   ```powershell
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
   ```
-- 常駐させるなら、タスクスケジューラのログオントリガを使います（管理者権限不要）。手順は [dist/README.md](dist/README.ja.md)。
-- `berth attach` の中から入れ直すときは、使用中の `.exe` を退かしてから置きます。退かした `*.exe.old` はそのプロセスが終わるまで消せませんが、次に install したときに自動で掃きます。
+- 常駐化（サービス登録）の手順については [dist/README.ja.md](dist/README.ja.md) を参照してください（タスク スケジューラのログオントリガーを使用、管理者権限不要）。
+- `berth attach` セッション内から再インストールを行う場合、インストーラーは実行中のバイナリを一時的にリネームして配置します（退避された `*.exe.old` はプロセス終了後の次回インストール時に自動削除されます）。
 
-手で入れる場合（標準の道具だけで済みます）:
+手動インストールの手順:
 
 ```powershell
 curl.exe -fsSL -o berthd.zip https://github.com/takakix2/berthd/releases/latest/download/berthd-windows-x86_64.zip
@@ -59,10 +59,10 @@ Move-Item berthd-*\berth*.exe $env:USERPROFILE\.local\bin\ -Force
 curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
 ```
 
-- 配布しているのは x86_64 です。
-- 常駐させるなら systemd の user service を使います。手順は [dist/README.md](dist/README.ja.md)。
+- 配布アーキテクチャ: x86_64
+- 常駐化（systemd user service）の手順については [dist/README.ja.md](dist/README.ja.md) を参照してください。
 
-手で入れる場合:
+手動インストールの手順:
 
 ```sh
 curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-linux-x86_64.tar.gz | tar xz
@@ -75,85 +75,76 @@ cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.sh | sh
 ```
 
-- 配布しているのは Apple Silicon（arm64）です。
-- 常駐させるなら launchd の LaunchAgent を使います。手順は [dist/README.md](dist/README.ja.md)。
+- 配布アーキテクチャ: Apple Silicon（arm64）
+- 常駐化（launchd LaunchAgent）の手順については [dist/README.ja.md](dist/README.ja.md) を参照してください。
 
-手で入れる場合:
+手動インストールの手順:
 
 ```sh
 curl -fsSL https://github.com/takakix2/berthd/releases/latest/download/berthd-macos-arm64.tar.gz | tar xz
 cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
 ```
 
-### どの OS でも
+### バージョンの整合性
 
-`berth` と `berthd` のバージョンが異なると動かない場合があります。うまく動かないときは `berth info` で両方のバージョンを確認してください。
+クライアント（`berth`）とデーモン（`berthd`）のバージョンが異なるとプロトコル不一致等により動作しない場合があります。動作に問題がある場合は `berth info` を実行し、双方のバージョンを確認してください。
 
 ## 使い方
 
 ```sh
-berth attach work     # セッション work に入る（無ければ作る。berthd も居なければ起こす）
+berth attach work     # セッション work にアタッチ（未作成時は新規作成、デーモン未起動時は自動起動）
 # … 作業 …
-berth d               # セッションから抜ける（シェルは berthd の下で動き続ける）
-berth attach work     # 同じシェルに戻る
+berth d               # セッションからデタッチ（シェルはバックグラウンドで稼働を継続）
+berth attach work     # 同一セッションに再アタッチ
 ```
 
-| コマンド                                   |                                                                                             |
+| コマンド                                   | 説明                                                                                        |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `berth attach [<name>]`（`a`）             | このターミナルでセッションに入る（無ければ作る）                                            |
-| `berth attach -s <shell> [<name>]`         | **指定したシェル**でセッションを作る（無ければ作る。`-s` / `--shell`）                      |
-| `berth attach -r <name>`                   | **見るだけ**で入る（打鍵も画面の大きさも送らない。`q` か Ctrl-C で抜ける）                  |
-| `berth attach --no-scrollback [<name>]`    | **最後の画面だけ**戻す（既定は、これまでの出力をこの端末のスクロールに流してから戻る。下記） |
-| `berth detach [<name>]`（`d`）             | セッションから抜ける（省略時は今いるセッション。見ている端末も含めて全員が抜ける）          |
-| `berth ls`                                 | 一覧（`*` が今いるセッション）                                                              |
-| `berth rename [<session>] <name>`（`r`）   | 名前を付け直す（省略時は今いるセッション）                                                  |
-| `berth kill <session>`                     | セッションを閉じる（中のシェルごと）                                                        |
-| `berth info`                               | 接続先の berthd（ホストとバージョン）と、**この端末で新しいセッションを作ったら起きるシェル**を表示 |
-| `berth kill-server [-f]`                   | berthd を停止する（セッションが残っていれば `-f` が要る）                                   |
+| `berth attach [<name>]`（`a`）             | カレント端末でセッションにアタッチ（存在しない場合は新規作成）                              |
+| `berth attach -s <shell> [<name>]`         | 指定したシェルでセッションを新規作成・アタッチ（`-s` / `--shell`）                          |
+| `berth attach -r <name>`                   | 読み取り専用（read-only）でアタッチ（キー入力・サイズ同期無効、`q` または `Ctrl-C` でデタッチ） |
+| `berth attach --no-scrollback [<name>]`    | スクロールバック再生をスキップし、カレント画面のみを復元（後述）                            |
+| `berth detach [<name>]`（`d`）             | セッションからデタッチ（省略時はカレントセッション。閲覧中の全クライアントがデタッチ）      |
+| `berth ls`                                 | セッション一覧の表示（`*` はカレントセッション）                                             |
+| `berth rename [<session>] <name>`（`r`）   | セッション名のリネーム（省略時はカレントセッション）                                        |
+| `berth kill <session>`                     | セッションの終了（子プロセスを含む強制終了）                                                |
+| `berth info`                               | 接続先デーモン情報（ホスト名・バージョン）および新規セッション生成時に起動されるシェルの表示 |
+| `berth kill-server [-f]`                   | berthd デーモンを停止（アクティブセッションが存在する場合は `-f` が必要）                   |
 | `berth --version` / `berthd --version`     | バージョンを表示（デーモンには接続しません）                                                |
 
-`<name>` には名前（`main` など）か id を渡せます。セッションの中では `BERTHD_SESSION` に自分の
-session id が入っているので、`berth ls` の `*` や、引数 1 つの `berth rename <name>` が効きます。
+`<name>` にはセッション名（`main` 等）またはセッション ID を指定できます。セッション内部では環境変数 `BERTHD_SESSION` に自身のセッション ID が格納されているため、引数を省略した `berth rename <name>` や `berth detach` はカレントセッションを対象として実行されます。
 
-### 入り直すと、これまでの出力が端末のスクロールで辿れる（既定）
+### スクロールバック再生による履歴復元（デフォルト動作）
 
-`berth attach` で戻ると、そのセッションがこれまでに出した出力（直近 512KB ぶん）を**この端末自身の
-スクロールバック**に流してから、今の画面を描き直します。tmux のように別の画面に閉じ込めないので、
-ホイールや端末の検索・コピーがいつもどおり効きます。全画面アプリ（vim など）の中に居たまま戻った
-ときは履歴を流さず、今の画面だけを描きます。
+`berth attach` で再接続すると、対象セッションの直近の出力履歴（最大 512 KB）を接続先端末自身のスクロールバックバッファへ再生した上でカレント画面を描画します。tmux などの仮想画面内に閉じ込められないため、ターミナルエミュレータ本来のマウスホイールスクロール、テキスト選択・コピー、検索機能がそのまま利用可能です。なお、vim などのフルスクリーン（オルタネートスクリーン）アプリケーションの実行中にアタッチした場合は、履歴再生をスキップしてカレント画面のみを描画します。
 
-- **最後の画面だけでよい**（従来の動作）: `berth attach --no-scrollback <name>`
-- **ずっと外す**: `BERTH_SCROLLBACK=off`
-- **同じペインで入り直すと続きだけ流します**: ペインごとに安定した ID を出す端末（Windows Terminal・WezTerm・kitty・iTerm2・Apple Terminal・Alacritty）では、`berth` がどこまで見せたかを覚えていて新しい分だけ流すので、同じ履歴が二重に積まれません。ID を出さない端末では、毎回 512 KB をまるごと流す従来の動作になります。
+- **カレント画面のみ復元**: `berth attach --no-scrollback <name>`
+- **常時無効化**: `BERTH_SCROLLBACK=off`
+- **差分スクロールバック再生**: 安定したペイン識別子を出力するターミナル（Windows Terminal、WezTerm、kitty、iTerm2、Apple Terminal、Alacritty）では、同一ペインでの再アタッチ時に未表示の差分出力のみを再生し、履歴の重複を防ぎます（識別子非対応のターミナルでは毎回直近 512 KB を再生します）。
 
-### シェルを指定してセッションを作る（`-s` / `--shell`）
+### 起動シェルの明示指定（`-s` / `--shell`）
 
-新しいセッションを作るとき、起動するシェルをアドホックに指定できます。
-`-s <shell>`、`--shell <shell>`、`--shell=<shell>` が使えます。
+新規セッション作成時、起動するシェルを明示的に指定できます。`-s <shell>`、`--shell <shell>`、`--shell=<shell>` 形式に対応しています。
 
 ```sh
-berth attach -s /bin/bash debug      # このセッションだけ bash で起動する
-berth attach -s hsh work             # hsh で新しいセッションを作る
-berth attach -s powershell.exe win   # Windows でシェルを指定する
+berth attach -s /bin/bash debug      # このセッションのみ bash で起動
+berth attach -s hsh work             # hsh で新しいセッションを作成
+berth attach -s powershell.exe win   # Windows でシェルを指定して作成
 ```
 
-- **新規作成時（セッションが存在しないとき）のみ有効です。** すでに動いている既存セッションに attach する場合は、そのセッションで動いているシェルにそのまま接続します（後からシェルをすり替えることはしません）。
-- **すべての OS（Linux / macOS / Windows）で効きます。** 環境変数（`BERTHD_SHELL`）や親プロセスの自動観測よりも最優先（出所: `client:cli_flag`）で解決されます。
-- `-r`（read-only）と組み合わせることもできます（例: `berth attach -s /bin/bash -r monitor`）。
+- **新規作成時のみ有効**: 既に稼働中のセッションへアタッチする場合は、そのセッションで実行中のシェルに接続します（シェルの動的差し替えは行われません）。
+- **全プラットフォーム共通**: 環境変数 `BERTHD_SHELL` や親プロセスの自動検出よりも優先して適用されます（出所識別子: `client:cli_flag`）。
+- `-r`（read-only）オプションと組み合わせて作成することも可能です（例: `berth attach -s /bin/bash -r monitor`）。
 
-### 複数の端末から同じセッションに入る
+### マルチクライアント接続
 
-- **キーを打てるのは常に 1 台です。** 別の端末から `berth attach` で同じセッションに入ると、前の端末は
-  `[detached from …]` と表示して抜けます（シェルはそのまま動き続けます）。前の端末の打鍵が
-  混ざることはありません。
-- **見るだけなら何台でも**（`berth attach -r`）。画面の大きさは打っている端末が決めるので、見る側がそれより小さいと全画面アプリの表示は崩れます。
-- 見る側が出力に追いつけないときは、**その見る側だけ**が外れます（打っている側は止まりません）。
+- **排他制御（単一操作クライアント）**: セッションに対してキー入力（書き込み）を行えるクライアントは常に 1 台に制限されます。別端末から `berth attach` が行われると、先行クライアントは自動的にデタッチされ（画面に `[detached from …]` を表示）、入力の競合や混濁を防止します（セッション内のシェルはそのまま動作を継続します）。
+- **読み取り専用クライアントの多重接続**: `-r` オプションによる読み取り専用アタッチは複数台から同時に接続可能です。ターミナルサイズ（PTY ウィンドウサイズ）は操作中クライアントのサイズに追従するため、閲覧側の端末サイズが小さい場合はフルスクリーンアプリケーションの表示が乱れる場合があります。
+- **遅延クライアントの自動切断**: 読み取り専用クライアントのバッファ溢れ（描画遅延）が発生した場合、操作側クライアントをブロックせず、該当の読み取りクライアントのみが自動的に切断されます。
 
-### いつものペインを一度に開く
+### ターミナル分割レイアウトの自動復元
 
-`berth attach <name>` は**無ければ作り、あれば繋ぐ**ので、レイアウトを開くスクリプトは
-**初回も 2 回目も同じ 1 本**で済みます。朝に叩けばセッションが生まれ、端末を閉じたあとにもう一度
-叩けば同じシェルへ戻ります。
+`berth attach <name>` は対象セッションの有無に応じて新規作成と再接続を透過的に切り替えるため、起動スクリプトを初回作成時・再開時で共通化できます。
 
 **Windows Terminal**（PowerShell から）:
 
@@ -161,119 +152,106 @@ berth attach -s powershell.exe win   # Windows でシェルを指定する
 wt new-tab --title dev berth attach dev `; split-pane -V berth attach build `; split-pane -H berth attach logs
 ```
 
-⚠️ PowerShell では `;` が自分の区切りとして食われるので、`wt` へ渡すには `` `; `` と書きます
-（cmd からなら素の `;` で通ります）。
+※ PowerShell ではセミコロンが構文区切り文字となるため、`wt` コマンドへ渡す際はバッククォートによるエスケープ（``` `; ```）が必要です（cmd.exe からはエスケープ不要）。
 
-**WezTerm**（WezTerm の中のシェルから）:
+**WezTerm**（WezTerm 内のシェルから）:
 
 ```sh
 wezterm cli spawn -- berth attach dev
 wezterm cli split-pane --right -- berth attach build
 ```
 
-同じセッションは、別の端末や ssh の向こうからでも `berth attach build` で入れます。
+作成されたセッションには、別端末や SSH 経由からでも `berth attach build` 等で接続できます。
 
 ### 環境変数
 
-| 変数                  | 効果                                                                                                                                                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BERTHD_SOCKET`       | ソケットの場所（既定は `$XDG_RUNTIME_DIR/berthd.sock`、無ければ `~/.berth/berthd.sock`）。**明示すると `berth attach` は berthd を起こしません**（転送したソケットなど、別の接続先を指している可能性があるため） |
-| `BERTHD_NO_SPAWN`     | 立てると `berth attach` が berthd を起こさなくなる。常駐させている環境で二重起動を防ぐ                                                                                                                           |
-| `BERTHD_SHELL`        | セッションで使うシェル（下記の「セッションのシェルはどう決まるか」）。`berth` を実行した環境と berthd 自身の環境の**どちらでも**効きます（前者が優先）                                                                               |
-| `BERTHD_JOURNAL_PATH` | journal の場所（既定 `~/.berth/journal.jsonl`）                                                                                                                                                                  |
-| `BERTHD_SESSION`      | **berthd が子プロセスに渡す**自分の session id（上記）                                                                                                                                                           |
-| `BERTH_SCROLLBACK`    | `off`（`0` / `no` / `false` も可）で、`berth attach` が出力を端末のスクロールに流すのをやめる（`--no-scrollback` を常に指定した状態）                                                                             |
-| `AUDIT_ACTOR`         | `berth` が attach のときに名乗る名前（journal の `actor`）。管理者が付ける想定です                                                                                                                       |
+| 変数                  | 説明                                                                                                                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BERTHD_SOCKET`       | UNIX ドメインソケットのパス（デフォルト: `$XDG_RUNTIME_DIR/berthd.sock`、未設定時は `~/.berth/berthd.sock`）。**明示的に指定した場合、`berth attach` はデーモンの自動起動を行いません**（ポート転送されたソケット等、外部接続先を指す可能性があるため）。 |
+| `BERTHD_NO_SPAWN`     | `1` に設定すると `berth attach` によるデーモンの自動起動を抑止します。OS サービス管理下での常駐運用時に二重起動を防止するために使用します。                                   |
+| `BERTHD_SHELL`        | 新規セッションで起動するシェル（後述の「起動シェルの決定優先順位」を参照）。クライアント実行環境とデーモン環境の双方で認識され、クライアント側が優先されます。                   |
+| `BERTHD_JOURNAL_PATH` | ジャーナルファイルの出力先パス（デフォルト: `~/.berth/journal.jsonl`）。                                                                                                        |
+| `BERTHD_SESSION`      | **デーモンが子プロセス（シェル）へ注入する**セッション ID。                                                                                                                      |
+| `BERTH_SCROLLBACK`    | `off`（`0` / `no` / `false` も可）に設定すると、アタッチ時のスクロールバック再生を無効化します（`--no-scrollback` を常時指定した状態と同等）。                                   |
+| `AUDIT_ACTOR`         | アタッチ時にクライアントが名乗る識別名（ジャーナルの `actor` 欄）。運用管理者や監査ツール等による設定を想定しています。                                                         |
 
-## セッションのシェルはどう決まるか
+## 起動シェルの決定優先順位
 
-`berth attach <名前>` で新しいセッションを作るとき、シェルは次の順で決まります。
+`berth attach <name>` で新しいセッションを作成する際、起動されるシェルは以下の優先順位に従って決定されます。
 
-| 順  | 何を見るか                                                                                       | 出所の呼び名          |
-| --- | ------------------------------------------------------------------------------------------------ | --------------------- |
-| 1   | `--shell <path>` / `-s <path>`（CLI 引数・最優先・**全 OS 共通**）                               | `client:cli_flag`     |
-| 2   | `BERTHD_SHELL`（`berth` を実行した環境・**全 OS 共通**）                                          | `client:berthd_shell` |
-| 3   | `~/.berth/config.toml` の `default-shell`（[設定ファイル](#設定ファイル)・**全 OS 共通**）        | `client:config`       |
-| 4   | **そのとき走っていたシェル**（`berth` の親プロセス。`/etc/shells` に載っているシェルだけ・unix のみ）| `client:parent_shell` |
-| 5   | `$SHELL`（同じく `berth` を実行した環境・unix のみ）                                               | `client:env_shell`    |
-| 6   | 上のどれも無ければ berthd 側の既定（`BERTHD_SHELL` → `$SHELL` → `/etc/passwd` のログインシェル → `/bin/bash` か `/bin/sh` の在る方 / `powershell.exe`） | `daemon:…`            |
+| 順位 | 判定対象                                                                                         | 出所識別子            |
+| :--- | :----------------------------------------------------------------------------------------------- | :-------------------- |
+| 1    | `--shell <path>` / `-s <path>`（CLI オプション・最優先・**全 OS 共通**）                         | `client:cli_flag`     |
+| 2    | `BERTHD_SHELL`（`berth` 実行環境の環境変数・**全 OS 共通**）                                      | `client:berthd_shell` |
+| 3    | `~/.berth/config.toml` 内の `default-shell`（[設定ファイル](#設定ファイル)・**全 OS 共通**）     | `client:config`       |
+| 4    | **親プロセスのシェル**（`berth` 実行元プロセス。`/etc/shells` に登録されているシェルのみ・UNIX 系） | `client:parent_shell` |
+| 5    | `$SHELL`（`berth` 実行環境の環境変数・UNIX 系）                                                  | `client:env_shell`    |
+| 6    | 上記がいずれも未指定の場合のデーモン側フォールバック（`BERTHD_SHELL` → `$SHELL` → `/etc/passwd` のログインシェル → `/bin/bash` または `/bin/sh` / Windows では `powershell.exe`） | `daemon:…`            |
 
-`berth info` がこの端末の答えを表示します。同じ呼び名が journal にも `shell_src` として残ります。
+`berth info` を実行することで、カレント環境における判定結果を確認できます（出所識別子はジャーナルの `shell_src` にも記録されます）。
 
-**4 番目が要る理由**: `bash` から `fish` と入力して fish に居るとき、`$SHELL` は `/bin/bash` のままです
-（`$SHELL` は「ログインシェルに何を選んだか」の申告値で、いま走っているシェルではありません）。
-そのため、**いま使っているシェルがそのままセッションのシェルになります**。
+**親プロセス自動検出の背景**: `bash` からインタラクティブに `fish` や `zsh` を起動している場合でも、環境変数 `$SHELL` はログインシェル（`/bin/bash`）の値を保持し続けます。`berth` は親プロセスの実行ファイルを調べることで、現在操作中のシェルを正確に引き継いでセッションを初期化します。
 
-**Windows では 4 と 5 は効きません**（`/etc/shells` が無く、git-bash の `$SHELL` は
-`/bin/bash.exe` という MSYS の綴りで、Windows のプロセス起動からは解決できないため）。
-切り替えは `-s / --shell` オプション・`BERTHD_SHELL`・設定ファイルの `default-shell` を使ってください。
+**Windows 環境における制約**: Windows では `/etc/shells` が存在せず、Git Bash 等の `$SHELL` は MSYS 仮想パス（`/bin/bash.exe`）を指すため、親プロセス検出（4）および `$SHELL` 参照（5）は無効化されています。シェルの指定には `-s / --shell`、環境変数 `BERTHD_SHELL`、または設定ファイルの `default-shell` を使用してください。
 
 ## 設定ファイル
 
-`berth` は `~/.berth/config.toml` を読みます（journal・ペインファイルと同じ場所。どの OS でも同じ）。別のファイルを読ませるには `BERTH_CONFIG=<path>`。無くても動きます。
+`berth` は `~/.berth/config.toml` を読み込みます（ジャーナルやペイン管理ファイルと同階層、全 OS 共通）。別のパスを指定する場合は `BERTH_CONFIG=<path>` を設定します。設定ファイルが存在しない場合でもデフォルト設定で動作します。
 
 ```toml
-# 新しいセッションのシェル（毎回 `berth attach -s hsh` と打つのと同じ）
+# 新規セッションで起動するデフォルトシェル（berth attach -s hsh を毎回指定するのと同等）
 default-shell = "hsh"
 
-# 新しく作るセッションにだけ足す環境変数
+# 新規セッション生成時に注入する環境変数
 [env]
 CLAUDE_CODE_SHELL = "~/.local/libexec/hsh-as-bash/bash"
 ```
 
-- `default-shell` は `-s` と `BERTHD_SHELL` に負け、観測したシェルに勝ちます（[セッションのシェルはどう決まるか](#セッションのシェルはどう決まるか)）。journal には `client:config` と残ります。
-- `[env]` は**セッションを作るときだけ**効きます。既存のセッションに入り直しても足しません。値の先頭の `~` / `~/` はホームに展開します。`$VAR` は展開しません。
-- 読めないファイル（TOML の誤り・知らないキー・型違い）は**黙って無視しません**。`berth` が 1 行名乗って、設定が無いものとして続けます。`berth info` に場所と読めたかが出ます。
+- `default-shell`: CLI オプション（`-s`）および環境変数 `BERTHD_SHELL` に次ぐ優先度を持ち、親プロセスの自動検出値に優先します（ジャーナルには `client:config` と記録されます）。
+- `[env]`: セッション新規作成時のみ環境変数を注入します（既存セッションへの再アタッチ時には注入されません）。値のプレフィックス `~` / `~/` はホームディレクトリパスへ展開されます（`$VAR` 形式の環境変数展開は非対応）。
+- **設定エラー時の挙動**: TOML 構文エラーや未知のキーが存在する場合、警告メッセージを出力した上で設定ファイルが存在しないものとして処理を継続します（読み込み成否およびパスは `berth info` で確認可能です）。
 
-**`[env]` が要る理由**: Claude Code のようなエージェントは命令ごとに自分のシェルを起こし、どのシェルかは環境変数（`CLAUDE_CODE_SHELL`）で決めます。上の例を書いておけば、セッションの中で起こした `claude` の命令も `hsh` の上で走り、その journal に残ります。
+**ユースケース（AI コーディングエージェント連携）**: Claude Code 等のエージェントツールは環境変数（`CLAUDE_CODE_SHELL` 等）で指定されたシェルをサブプロセスとして起動します。`[env]` に設定を記述しておくことで、セッション内で実行されるエージェントのシェルを監査対象シェル（hsh 等）へ統一できます。
 
 ---
 
-## Journal
+## ジャーナル（監査ログ）
 
-berthd は**セッションを起こしたこと**と **attach の開始・終了**を `~/.berth/journal.jsonl` に
-NDJSON（[Rheon Protocol](https://github.com/rheon-protocol/spec) v1 レコード）で残します。設定は要りません。
+`berthd` は、セッションの生成・終了およびアタッチ／デタッチのイベントを `~/.berth/journal.jsonl` に NDJSON（[Rheon Protocol](https://github.com/rheon-protocol/spec) v1 レコード）で永続記録します（追加設定不要）。
 
-| 行                            | いつ                     | 何が読めるか                                                                      |
-| ----------------------------- | ------------------------ | --------------------------------------------------------------------------------- |
-| `spawn:started`               | セッションを起こしたとき | どのシェルで起こしたか（`shell`）と、**それを誰が決めたか**（`shell_src`）、`cwd` |
-| `spawn:failed`                | シェルを起こせなかったとき | 何を起こそうとしたか（`shell` / `shell_src`）と、**なぜ駄目だったか**（`reason`） |
-| `attach:start` / `attach:end` | 誰かが入った / 出たとき  | 誰が入ったか、どのくらい居たか、どう抜けたか                                      |
+| イベント種別                  | 記録タイミング             | 主な記録内容                                                                       |
+| ----------------------------- | -------------------------- | ---------------------------------------------------------------------------------- |
+| `spawn:started`               | セッション生成時           | 起動シェル（`shell`）、シェルの決定元（`shell_src`）、作業ディレクトリ（`cwd`）    |
+| `spawn:failed`                | シェル起動失敗時           | 起動試行シェル（`shell` / `shell_src`）、失敗理由（`reason`）                      |
+| `attach:start` / `attach:end` | クライアント接続／切断時   | 接続プロセス情報、滞在時間、切断要因（`how`）                                      |
 
-1 行に**カーネルが観測した値**（`peer_uid` / `peer_pid` / `peer_auid` / `peer_ancestry`）と、**クライアントの自己申告**（`actor` / `actor_src`・`AUDIT_ACTOR` か `AI_AGENT` から拾う・検証しません）の両方が載ります。
-人も AI エージェントも同じ uid で動くので観測だけでは足りず、名乗りだけでも足りません。並べて置けば、食い違いが 1 行で読めます。
+各レコードには、**カーネルが観測したプロセス属性**（`peer_uid`, `peer_pid`, `peer_auid`, `peer_ancestry`）と、**クライアントの自己申告値**（`actor`, `actor_src`・`AUDIT_ACTOR` または `AI_AGENT` から取得、未検証）の双方が記録されます。同一 UID 上で人間と AI エージェントが並行動作する環境において、OS レベルの客観的証跡とアプリケーション申告値を照合・検証できます。
 
 <details>
-<summary>欄の一覧</summary>
+<summary>フィールド一覧</summary>
 
-| 欄                                    | 何か                                                                                                   | 出所                   |
+| フィールド                            | 説明                                                                                                   | 出所                   |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------- |
-| `peer_uid` / `peer_pid`               | 接続してきたプロセス                                                                                   | カーネル               |
-| `peer_auid`                           | ログインしたときのユーザーの監査 uid（`su` や `sudo` をまたいでも変わらない・Linux / macOS）            | カーネル               |
-| `peer_ancestry` / `peer_ancestry_src` | attach した瞬間の、接続してきたプロセスの親の並び（最大 8 段）と、どこまで読めたか                     | カーネル               |
-| `actor` / `actor_src`                 | クライアントが名乗った名前と、その出所（`audit_actor` / `agent`）                                      | 自己申告（検証しない） |
-| `shell` / `shell_src`                 | 実際に起こした実行ファイルと、それを誰が決めたか                                                       | berthd                 |
-| `read_only`                           | 見るだけの接続か                                                                                       | berthd                 |
-| `how`                                 | `exited`（シェルが終了）／ `detached`（外された）／ `closed`（自分で抜けた）／ `too_slow`（追いつけず） | berthd                 |
+| `peer_uid` / `peer_pid`               | 接続クライアントの UID / PID                                                                           | カーネル観測           |
+| `peer_auid`                           | ログイン時の監査 UID（`su` や `sudo` 実行後も不変・Linux / macOS）                                     | カーネル観測           |
+| `peer_ancestry` / `peer_ancestry_src` | アタッチ時点における接続元プロセスの祖先プロセスツリー（最大 8 階層）および取得ステータス              | カーネル観測           |
+| `actor` / `actor_src`                 | クライアント申告名およびその出所（`audit_actor` / `agent`）                                            | 自己申告（未検証）     |
+| `shell` / `shell_src`                 | 実際に起動した実行ファイルパスおよび決定元                                                             | berthd                 |
+| `read_only`                           | 読み取り専用接続フラグ                                                                                 | berthd                 |
+| `how`                                 | 切断要因: `exited`（シェル終了）/ `detached`（他クライアントによる追い出し）/ `closed`（正常デタッチ）/ `too_slow`（描画遅延による切断） | berthd                 |
 
 </details>
 
-**どの道具が attach したのかを知りたいときは `peer_ancestry` を読んでください**（`actor` は誰かが選んだ名前で、選ばなければ空です）。
-直の親はたいていシェルや端末（`bash`・`WindowsTerminal.exe`）で、道具はそのもう少し奥に出ます。末尾の `.exe` は大小を無視して落としてから比べてください。
-親の並びは `sshd` で止めずに辿るので、ssh 越しでも「何から起動されたか」が残ります。
+**アタッチ元ツールの追跡**: アタッチ元のツールやプロセスを特定する場合は `peer_ancestry` を参照します（`actor` は明示的に指定しない限り空となります）。直接の親プロセスは通常シェルやターミナル（`bash`、`WindowsTerminal.exe` 等）となり、呼び出し元のツールはその上位階層に現れます（Windows の `.exe` 拡張子は大小文字を無視して比較してください）。プロセスツリーは `sshd` を越えて追跡されるため、SSH 経由の接続でも起動元プロセスを特定できます。
 
-berthd はシェルの中で打たれたコマンドを記録しません。シェルが `BERTHD_SESSION` を自分の記録に残せば（例: hsh の `session:start`）、berthd の journal と session id で突き合わせられます。
+なお、`berthd` はシェル内部で実行された個別コマンド自体は記録しません。シェル側で環境変数 `BERTHD_SESSION` を自身のログに記録することで（例: hsh の `session:start`）、`berthd` のジャーナルとシェル監査ログをセッション ID をキーとして相互照合できます。
 
-### 権限
+### パーミッションとセキュリティモデル
 
-ソケットは `0600`、`~/.berth` は `0700`、journal は `0600` で berthd 自身が作ります（起動元の umask に
-依存しません）。macOS には `XDG_RUNTIME_DIR` が無く、ソケットは `~/.berth` に置かれるため、
-この締め付けがそのまま防御になります。
+UNIX ドメインソケットはパーミッション `0600`、ディレクトリ `~/.berth` は `0700`、ジャーナルファイルは `0600` で `berthd` 自身によって作成されます（プロセスの umask に依存しません）。macOS では `XDG_RUNTIME_DIR` が存在せずソケットが `~/.berth` 配下に配置されますが、ディレクトリパーミッションによって保護されます。
 
-Windows の名前付きパイプ（`\\.\pipe\berthd-<user>`）には所有者だけの DACL が付き、`berth` は繋いだ先の
-プロセスが自分のアカウントの物かを握手の前に確かめます（他のユーザーに取られていれば、相手を名指しして断ります）。
-同じアカウントで走る別のプロセスからは守りません。
+Windows の名前付きパイプ（`\\.\pipe\berthd-<user>`）には所有者アカウントのみを許可する DACL が設定され、`berth` は接続先プロセスの SID が自身のアカウントと一致するかをハンドシェイク前に検証します（別ユーザーによるパイプの横取りを防止します）。同一アカウント権限で動作する悪意ある別プロセスからの保護は対象外です。
 
 ## ライセンス
 
-ISC（[LICENSE](LICENSE)）。同梱しているサードパーティの表示は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) にあります。
+ISC ライセンス（[LICENSE](LICENSE)）。サードパーティ製ライブラリのライセンス表記は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照してください。
