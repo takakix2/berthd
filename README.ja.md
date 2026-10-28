@@ -42,7 +42,7 @@ irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 |
   ```powershell
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1))) -Target windows-x86_64
   ```
-- 常駐させるなら、タスクスケジューラのログオントリガを使います（管理者権限不要）。手順は [dist/README.md](dist/README.md)。
+- 常駐させるなら、タスクスケジューラのログオントリガを使います（管理者権限不要）。手順は [dist/README.md](dist/README.ja.md)。
 - `berth attach` の中から入れ直すときは、使用中の `.exe` を退かしてから置きます。退かした `*.exe.old` はそのプロセスが終わるまで消せませんが、次に install したときに自動で掃きます。
 
 手で入れる場合（標準の道具だけで済みます）:
@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/instal
 ```
 
 - 配布しているのは x86_64 です。
-- 常駐させるなら systemd の user service を使います。手順は [dist/README.md](dist/README.md)。
+- 常駐させるなら systemd の user service を使います。手順は [dist/README.md](dist/README.ja.md)。
 
 手で入れる場合:
 
@@ -76,7 +76,7 @@ curl -fsSL https://raw.githubusercontent.com/takakix2/berthd/main/scripts/instal
 ```
 
 - 配布しているのは Apple Silicon（arm64）です。
-- 常駐させるなら launchd の LaunchAgent を使います。手順は [dist/README.md](dist/README.md)。
+- 常駐させるなら launchd の LaunchAgent を使います。手順は [dist/README.md](dist/README.ja.md)。
 
 手で入れる場合:
 

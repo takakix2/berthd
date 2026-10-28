@@ -1,93 +1,87 @@
-# dist — berthd を常駐させる
+# dist — keep berthd running
 
-他のマシンやモバイルの端末アプリから `ssh` で入って `berth attach` する使い方では、そのマシンで
-berthd が**常駐**している必要があります。ここにはそのための service 定義を置いています。
+[日本語](README.ja.md)
 
-先に `berthd` と `berth` を `~/.local/bin` に入れておきます（[README](../README.md) の「入れる」）。
+To `ssh` into a machine (from another computer or from a mobile terminal app) and `berth attach`,
+berthd has to be running on that machine. This page shows how to keep it running on each OS.
 
-## Linux（systemd user service）
+Install `berthd` and `berth` into `~/.local/bin` first (see "Install" in the [README](../README.md)).
+
+## Linux (systemd user service)
 
 ```sh
 mkdir -p ~/.config/systemd/user
 cp dist/berthd.service ~/.config/systemd/user/
-loginctl enable-linger "$USER"        # ログアウト後も動かし続ける（常駐させるなら必須）
+loginctl enable-linger "$USER"
 systemctl --user daemon-reload
 systemctl --user enable --now berthd
-berth info                             # 動作確認
 ```
 
-停止は `systemctl --user stop berthd` です（service 管理下では `berth kill-server` を使いません）。
+`loginctl enable-linger` is required. Without it, berthd stops when your last login session ends.
 
-## macOS（launchd LaunchAgent）
+To stop it: `systemctl --user stop berthd`.
+
+## macOS (launchd LaunchAgent)
+
+Copy the plist, replacing the path placeholder (`/Users/CHANGEME`) with your home directory:
 
 ```sh
-# plist の ProgramArguments のパス（/Users/CHANGEME）を自分の $HOME に直してから:
-cp dist/com.berth.berthd.plist ~/Library/LaunchAgents/
+mkdir -p ~/Library/LaunchAgents
+sed "s|/Users/CHANGEME|$HOME|" dist/com.berth.berthd.plist > ~/Library/LaunchAgents/com.berth.berthd.plist
 launchctl load -w ~/Library/LaunchAgents/com.berth.berthd.plist
-berth info
 ```
 
-停止は `launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist` です。
+To stop it: `launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist`.
 
-## Windows（タスクスケジューラのログオントリガ）
+## Windows (Task Scheduler logon trigger)
 
-🚨 **`systemd` も `launchd` も無い面**なので、上の 2 つの unit は使えません
-（だから Windows の配布物には `dist/` を入れていません）。代わりに**タスクスケジューラ**を使います。
-
-PowerShell で（⭐ **管理者権限は要りません**）:
+Windows has neither systemd nor launchd, so use Task Scheduler. No administrator rights are needed.
 
 ```powershell
 $exe = "$env:USERPROFILE\.local\bin\berthd.exe"
 $a = New-ScheduledTaskAction -Execute $exe
 $t = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-# ⚠️ ExecutionTimeLimit を 0 にしないと、既定の 3 日で**勝手に止められます**（daemon なので）。
 $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
          -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName "berthd" -Action $a -Trigger $t -Settings $s -Force
-berth info                              # 動作確認
 ```
 
-止めるのは `Unregister-ScheduledTask -TaskName berthd -Confirm:$false` です
-（🚫 service 管理下では `berth kill-server` を使いません。下の節を見てください）。
+Set `-ExecutionTimeLimit` to zero (no limit). With the default, Task Scheduler stops the task after three days.
 
-⚠️ **Windows サービス（`sc.exe`）にはしないでください。** サービスは Session 0 で走るので、
-デスクトップの `berth` から berthd に届かないことがあります。ログオントリガなら、ログオンしている
-ユーザーの session で動きます。
+To stop it: `Unregister-ScheduledTask -TaskName berthd -Confirm:$false`.
 
-⚠️ **ログオンしていない間は走りません**（unix の `loginctl enable-linger` に当たる設定はありません）。
+- Do not make it a Windows service (`sc.exe`). Services run in Session 0, where `berth` on the desktop
+  may not reach them. A logon trigger runs berthd in the session of the user who is logged on.
+- It does not run while you are logged off (there is no equivalent of Linux's `enable-linger`).
 
-## service 管理下では自動起動を切る（推奨）
+## On every OS
 
-berthd を service に任せるなら、その環境で **`BERTHD_NO_SPAWN=1`** を立てておくと、service が
-一瞬落ちた隙に `berth attach` が**別の berthd を立てて二重になる**のを防げます。`~/.profile` などに:
+### Check that it is running
 
 ```sh
+berth info
+```
+
+`berth info` never starts berthd, so if it prints a berthd version, the berthd you set up is running.
+
+### Do not use `berth kill-server`
+
+While berthd is kept running this way, stop it with your OS's command above. If you stop it with
+`berth kill-server`, the OS sees a clean exit and does not restart it.
+
+### Turn off auto-start (recommended)
+
+`berth attach` starts a berthd if none is running. When berthd is kept running by the OS, set
+`BERTHD_NO_SPAWN` so that a brief restart cannot leave you with a second berthd.
+
+```sh
+# Linux / macOS (e.g. in ~/.profile)
 export BERTHD_NO_SPAWN=1
 ```
 
-service を使わず「最初の `berth attach` で立てる」運用なら、これは設定しません。
-
-## 旧 `argod` / `argo` から乗り換える
-
-バイナリだけ入れ替えても、unit が古い名前を起こしに行きます。unit も入れ替えてください。
-
-```sh
-# Linux (systemd --user)
-systemctl --user disable --now argod          # 旧 unit を止めてから
-rm -f ~/.config/systemd/user/argod.service
-cp dist/berthd.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now berthd
-
-# macOS (launchd)
-launchctl unload ~/Library/LaunchAgents/com.argo.argod.plist   # 旧 Label を外してから
-rm -f ~/Library/LaunchAgents/com.argo.argod.plist
-cp dist/com.berth.berthd.plist ~/Library/LaunchAgents/
-launchctl load -w ~/Library/LaunchAgents/com.berth.berthd.plist
-
-# 旧バイナリを消す（installer を使った場合は消えています）
-rm -f ~/.local/bin/argod ~/.local/bin/argo
+```powershell
+# Windows (user environment variable; takes effect in newly opened shells)
+[Environment]::SetEnvironmentVariable("BERTHD_NO_SPAWN", "1", "User")
 ```
 
-旧バイナリは必ず消してください。`argo` / `argod` は新しい berthd と**別のソケット**を見るので、
-繋がらないか、古いデーモンに繋がって「セッションが無い」と答えます。
+If you do not keep berthd running and let the first `berth attach` start it, leave this unset.
