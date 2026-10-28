@@ -1,11 +1,10 @@
-# dist — keep berthd running
+# dist — Running berthd as a Service
 
 [日本語](README.ja.md)
 
-To `ssh` into a machine (from another computer or from a mobile terminal app) and `berth attach`,
-berthd has to be running on that machine. This page shows how to keep it running on each OS.
+When connecting via SSH or using terminal apps from mobile devices, `berthd` must remain running in the background even when no client is currently attached. This guide explains how to register and manage `berthd` as an OS-level service on Linux, macOS, and Windows.
 
-Install `berthd` and `berth` into `~/.local/bin` first (see "Install" in the [README](../README.md)).
+Make sure `berthd` and `berth` are installed in `~/.local/bin` (or another directory in your `PATH`) beforehand (see [README](../README.md)).
 
 ## Linux (systemd user service)
 
@@ -17,13 +16,12 @@ systemctl --user daemon-reload
 systemctl --user enable --now berthd
 ```
 
-`loginctl enable-linger` is required. Without it, berthd stops when your last login session ends.
-
-To stop it: `systemctl --user stop berthd`.
+- **Enable lingering**: Running `loginctl enable-linger "$USER"` is required to keep the daemon running after your SSH or login session disconnects. Without lingering, systemd terminates user processes upon logout.
+- **Stopping the service**: `systemctl --user stop berthd`
 
 ## macOS (launchd LaunchAgent)
 
-Copy the plist, replacing the path placeholder (`/Users/CHANGEME`) with your home directory:
+Deploy the template plist (`dist/com.berth.berthd.plist`) to your LaunchAgents directory, substituting the placeholder (`/Users/CHANGEME`) with your actual home directory, and load it:
 
 ```sh
 mkdir -p ~/Library/LaunchAgents
@@ -31,11 +29,11 @@ sed "s|/Users/CHANGEME|$HOME|" dist/com.berth.berthd.plist > ~/Library/LaunchAge
 launchctl load -w ~/Library/LaunchAgents/com.berth.berthd.plist
 ```
 
-To stop it: `launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist`.
+- **Stopping the agent**: `launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist`
 
 ## Windows (Task Scheduler logon trigger)
 
-Windows has neither systemd nor launchd, so use Task Scheduler. No administrator rights are needed.
+On Windows, use Task Scheduler with a logon trigger to run `berthd` inside your user session (administrator privileges are not required).
 
 ```powershell
 $exe = "$env:USERPROFILE\.local\bin\berthd.exe"
@@ -46,42 +44,37 @@ $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBat
 Register-ScheduledTask -TaskName "berthd" -Action $a -Trigger $t -Settings $s -Force
 ```
 
-Set `-ExecutionTimeLimit` to zero (no limit). With the default, Task Scheduler stops the task after three days.
+- **Execution time limit**: Set `-ExecutionTimeLimit` to `[TimeSpan]::Zero` (unlimited). By default, Task Scheduler terminates tasks after 72 hours.
+- **Stopping and unregistering**: `Unregister-ScheduledTask -TaskName berthd -Confirm:$false`
+- **Do not register as a Windows Service (`sc.exe`)**: Windows services run in Session 0 (session isolation), which may prevent desktop `berth` clients from accessing the named pipe. A logon trigger ensures the daemon runs inside the interactive user session.
+- **Logoff behavior**: The daemon will not run while logged off (Windows has no direct equivalent to systemd lingering).
 
-To stop it: `Unregister-ScheduledTask -TaskName berthd -Confirm:$false`.
+## General Operations
 
-- Do not make it a Windows service (`sc.exe`). Services run in Session 0, where `berth` on the desktop
-  may not reach them. A logon trigger runs berthd in the session of the user who is logged on.
-- It does not run while you are logged off (there is no equivalent of Linux's `enable-linger`).
-
-## On every OS
-
-### Check that it is running
+### Health Check
 
 ```sh
 berth info
 ```
 
-`berth info` never starts berthd, so if it prints a berthd version, the berthd you set up is running.
+`berth info` never starts `berthd` on demand. If it successfully outputs version and status information, the daemon registered with your OS service manager is running.
 
-### Do not use `berth kill-server`
+### Stopping the Daemon (Do not use `berth kill-server`)
 
-While berthd is kept running this way, stop it with your OS's command above. If you stop it with
-`berth kill-server`, the OS sees a clean exit and does not restart it.
+When running under a service manager, always stop `berthd` using your OS service command (`systemctl stop`, `launchctl unload`, etc.). Using `berth kill-server` exits with status 0, which service managers treat as a clean exit and will not restart.
 
-### Turn off auto-start (recommended)
+### Suppressing On-Demand Spawning (Recommended)
 
-`berth attach` starts a berthd if none is running. When berthd is kept running by the OS, set
-`BERTHD_NO_SPAWN` so that a brief restart cannot leave you with a second berthd.
+By default, `berth attach` automatically launches `berthd` if it is not currently running. When using a service manager, set `BERTHD_NO_SPAWN=1` to prevent accidental dual instances during transient restarts.
 
 ```sh
-# Linux / macOS (e.g. in ~/.profile)
+# Linux / macOS (e.g. in ~/.profile or ~/.bashrc)
 export BERTHD_NO_SPAWN=1
 ```
 
 ```powershell
-# Windows (user environment variable; takes effect in newly opened shells)
+# Windows (user environment variable; effective for new shells)
 [Environment]::SetEnvironmentVariable("BERTHD_NO_SPAWN", "1", "User")
 ```
 
-If you do not keep berthd running and let the first `berth attach` start it, leave this unset.
+(If you prefer on-demand startup on the first `berth attach` rather than running a persistent service, leave this variable unset.)

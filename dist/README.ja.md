@@ -1,11 +1,10 @@
-# dist — berthd を常駐させる
+# dist — berthd の常駐化
 
 [English](README.md)
 
-他のマシンやモバイルの端末アプリから `ssh` で入って `berth attach` する使い方では、そのマシンで
-berthd が常駐している必要があります。ここでは OS ごとの常駐のさせ方を説明します。
+SSH 経由での接続やモバイル端末からのリモート利用など、クライアントが接続していない間もセッションを維持したい環境では、OS のサービス管理機構を用いて `berthd` をバックグラウンドで常駐（デーモン化）させます。本ドキュメントでは、各 OS におけるサービス登録手順を解説します。
 
-先に `berthd` と `berth` を `~/.local/bin` に入れておきます（[README](../README.ja.md) の「入れる」）。
+事前に `berthd` および `berth` を `~/.local/bin`（または PATH の通ったディレクトリ）へインストールしてください（詳細は [README](../README.ja.md) の「インストール」を参照）。
 
 ## Linux（systemd user service）
 
@@ -17,13 +16,12 @@ systemctl --user daemon-reload
 systemctl --user enable --now berthd
 ```
 
-`loginctl enable-linger` は必須です。これが無いと、最後のログインセッションが切れたときに berthd も止まります。
-
-止めるときは `systemctl --user stop berthd` です。
+- **linger の有効化**: セッション切断後もデーモンを稼働し続けるため、`loginctl enable-linger "$USER"` が必須です（未設定の場合、最後のログインセッション終了時にプロセスが停止します）。
+- **停止手順**: `systemctl --user stop berthd`
 
 ## macOS（launchd LaunchAgent）
 
-plist のパス（`/Users/CHANGEME`）を自分のホームに置き換えながら写します。
+テンプレート（`dist/com.berth.berthd.plist`）内のプレースホルダー（`/Users/CHANGEME`）を自身のホームディレクトリへ展開して配置し、ロードします。
 
 ```sh
 mkdir -p ~/Library/LaunchAgents
@@ -31,11 +29,11 @@ sed "s|/Users/CHANGEME|$HOME|" dist/com.berth.berthd.plist > ~/Library/LaunchAge
 launchctl load -w ~/Library/LaunchAgents/com.berth.berthd.plist
 ```
 
-止めるときは `launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist` です。
+- **停止手順**: `launchctl unload ~/Library/LaunchAgents/com.berth.berthd.plist`
 
-## Windows（タスクスケジューラのログオントリガ）
+## Windows（タスク スケジューラのログオントリガー）
 
-Windows には systemd も launchd も無いので、タスクスケジューラを使います。管理者権限は要りません。
+Windows 環境では、タスク スケジューラのログオントリガーを利用してユーザーセッション内でバックグラウンド起動します（管理者権限は不要です）。
 
 ```powershell
 $exe = "$env:USERPROFILE\.local\bin\berthd.exe"
@@ -46,42 +44,37 @@ $s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBat
 Register-ScheduledTask -TaskName "berthd" -Action $a -Trigger $t -Settings $s -Force
 ```
 
-`-ExecutionTimeLimit` は 0（無制限）にします。既定のままだと、3 日でタスクとして止められます。
+- **実行時間制限の解除**: タイムアウトによるプロセス停止を防ぐため、`-ExecutionTimeLimit` には `[TimeSpan]::Zero`（無制限）を指定します（デフォルト設定のままだと 72 時間でタスクが停止されます）。
+- **停止・登録解除**: `Unregister-ScheduledTask -TaskName berthd -Confirm:$false`
+- **Windows サービス（`sc.exe` 等）として登録しないこと**: サービスは Session 0（分離セッション）で実行されるため、ユーザーセッション（デスクトップ）の `berth` から名前付きパイプへ接続できない場合があります。ログオントリガーであれば、ログオン中ユーザーのセッション内で実行されます。
+- **ログオフ時の挙動**: ユーザーがログオンしていない状態では動作しません（Linux の `enable-linger` に相当する機能はありません）。
 
-止めるときは `Unregister-ScheduledTask -TaskName berthd -Confirm:$false` です。
+## 共通事項
 
-- Windows サービス（`sc.exe`）にはしないでください。サービスは Session 0 で走るので、デスクトップの
-  `berth` から届かないことがあります。ログオントリガなら、ログオンしているユーザーの session で動きます。
-- ログオンしていない間は走りません（Linux の `enable-linger` に当たる設定はありません）。
-
-## どの OS でも
-
-### 動いているか確かめる
+### 稼働確認
 
 ```sh
 berth info
 ```
 
-`berth info` は berthd を起こさないので、ここで berthd の版が出れば、常駐させた berthd が動いています。
+`berth info` はデーモンを自動起動（オンデマンド起動）しません。そのため、バージョン情報等の応答が返れば、サービスとして登録した `berthd` が正常に常駐稼働していることを確認できます。
 
-### `berth kill-server` を使わない
+### プロセスの停止方法（`berth kill-server` を使用しない）
 
-常駐させている間は、上の各 OS の止め方で止めてください。`berth kill-server` で止めると、
-OS の側は「正常に終わった」と受け取り、立て直しません。
+サービスとして常駐させている場合は、`berth kill-server` ではなく、各 OS のサービス管理コマンド（`systemctl stop` / `launchctl unload` 等）を用いて停止してください。`berth kill-server` で終了させると、OS 側は「正常終了」と判断して再起動を行いません。
 
-### 自動起動を切る（推奨）
+### クライアントによる自動起動の抑止（推奨）
 
-`berth attach` は、berthd が居なければその場で起こします。常駐させているときは、常駐側が一瞬落ちた
-隙に別の berthd が立って二重になるのを防ぐため、`BERTHD_NO_SPAWN` を立てておきます。
+デフォルトでは、`berth attach` は `berthd` が未起動の場合に自動でデーモンを起動します。OS のサービス機構で常駐運用する場合は、再起動などの過渡状態でプロセスが二重起動することを防ぐため、環境変数 `BERTHD_NO_SPAWN=1` の設定を推奨します。
 
 ```sh
-# Linux / macOS（~/.profile など）
+# Linux / macOS（~/.profile や ~/.bashrc など）
 export BERTHD_NO_SPAWN=1
 ```
 
 ```powershell
-# Windows（ユーザーの環境変数・新しく開いたシェルから効く）
+# Windows（ユーザー環境変数・新規シェルから反映）
 [Environment]::SetEnvironmentVariable("BERTHD_NO_SPAWN", "1", "User")
 ```
 
-常駐させず「最初の `berth attach` で立てる」使い方なら、これは設定しません。
+（常駐運用を行わず、最初の `berth attach` 時にオンデマンド起動させる運用の場合は、この設定は不要です。）
