@@ -1,31 +1,31 @@
 # Third-Party Notices
 
-The binaries berthd distributes (`berthd` and `berth`) includes the third-party crates listed below.
-Their license texts are reproduced here, as those licenses require.
+The binaries berthd distributes (`berthd` and `berth`) includes the third-party software listed below. Their license texts are
+reproduced here, as those licenses require.
 
 > This file is generated. Do not edit it by hand.
 > Regenerate with `./scripts/gen-notices.sh` whenever the dependencies change.
 > 
-> What is counted: only the dependencies that are actually linked, as reported by
-> `cargo tree -e normal` (unused optional and dev-dependencies are excluded), unioned
-> over the 3 shipped targets — some crates are present on only one OS,
-> so a single target is not enough.
+> Rust crates: the dependencies linked into the app, unioned over the
+> 3 shipped targets (x86_64-unknown-linux-gnu, aarch64-apple-darwin, x86_64-pc-windows-msvc),
+> plus the proc-macros used to build it and their dependencies, as a build on each of those
+> targets would resolve them.
 > 
-> This is not the license of berthd itself. See `LICENSE` for hsh's own distribution terms.
+> This is not the license of berthd itself. See `LICENSE` for berthd's own distribution terms.
 
-Crates covered: **87** (license text bundled: 87 / no license file in the crate: 0)
+Rust crates: **87** / npm packages: **0**
 
-Crates that ship the same license text are grouped together. Within a group the text
-is byte-identical apart from the copyright line, so **every crate's copyright notice**
-is listed with the group and the full text is printed once.
+Software that ships the same license text is grouped. Within a group the text is
+byte-identical apart from the copyright lines, so every package's copyright notice is
+listed with the group and the full text is printed once.
 
 ---
 
-## 1. Apache License 2.0 — 31 crate(s)
+## 1. Apache License 2.0 — 31 package(s)
 
 Declared SPDX: `Apache-2.0 OR MIT`, `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`, `MIT OR Apache-2.0`, `MIT/Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - arrayvec 0.7.8 — (no copyright line in the license file)
 - atomic-waker 1.1.2 — (no copyright line in the license file)
@@ -59,7 +59,7 @@ Crates, with the copyright notice each one ships:
 - socket2 0.6.4 — (no copyright line in the license file)
 - unicode-width 0.2.2 — (no copyright line in the license file)
 
-Full text as shipped by `arrayvec 0.7.8` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `arrayvec 0.7.8` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -265,11 +265,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 2. MIT License — 29 crate(s)
+## 2. MIT License — 29 package(s)
 
 Declared SPDX: `Apache-2.0 OR MIT`, `Apache-2.0/MIT`, `MIT`, `MIT OR Apache-2.0`, `MIT/Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - arrayvec 0.7.8 — Copyright (c) Ulrik Sverdrup "bluss" 2015-2023
 - bitflags 1.3.2 — Copyright (c) 2014 The Rust Project Developers
@@ -301,7 +301,7 @@ Crates, with the copyright notice each one ships:
 - unicode-width 0.2.2 — Copyright (c) 2015 The Rust Project Developers
 - vte 0.15.0 — Copyright (c) 2016 Joe Wilm
 
-Full text as shipped by `arrayvec 0.7.8` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `arrayvec 0.7.8` (`LICENSE-MIT`):
 
 ```
 Copyright (c) Ulrik Sverdrup "bluss" 2015-2023
@@ -331,11 +331,11 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-## 3. MIT License — 23 crate(s)
+## 3. MIT License — 23 package(s)
 
 Declared SPDX: `(MIT OR Apache-2.0) AND Unicode-3.0`, `Apache-2.0 OR MIT`, `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`, `MIT`, `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - anyhow 1.0.103 — (no copyright line in the license file)
 - atomic-waker 1.1.2 — (no copyright line in the license file)
@@ -361,7 +361,7 @@ Crates, with the copyright notice each one ships:
 - unicode-ident 1.0.24 — (no copyright line in the license file)
 - zmij 1.0.21 — (no copyright line in the license file)
 
-Full text as shipped by `anyhow 1.0.103` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `anyhow 1.0.103` (`LICENSE-MIT`):
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -389,11 +389,11 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-## 4. Apache License 2.0 — 14 crate(s)
+## 4. Apache License 2.0 — 14 package(s)
 
 Declared SPDX: `(MIT OR Apache-2.0) AND Unicode-3.0`, `Apache-2.0 OR MIT`, `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - anyhow 1.0.103 — (no copyright line in the license file)
 - itoa 1.0.18 — (no copyright line in the license file)
@@ -410,7 +410,7 @@ Crates, with the copyright notice each one ships:
 - unicode-ident 1.0.24 — (no copyright line in the license file)
 - vte 0.15.0 — (no copyright line in the license file)
 
-Full text as shipped by `anyhow 1.0.103` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `anyhow 1.0.103` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -591,11 +591,11 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 ```
 
-## 5. MIT License — 10 crate(s)
+## 5. MIT License — 10 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`, `MIT/Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - dirs 5.0.1 — Copyright (c) 2018-2019 dirs-rs contributors
 - dirs 6.0.0 — Copyright (c) 2018-2019 dirs-rs contributors
@@ -608,7 +608,7 @@ Crates, with the copyright notice each one ships:
 - toml_writer 1.1.3+spec-1.1.0 — Copyright (c) Individual contributors
 - winapi 0.3.9 — Copyright (c) 2015-2018 The winapi-rs Developers
 
-Full text as shipped by `dirs 5.0.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `dirs 5.0.1` (`LICENSE-MIT`):
 
 ```
 Copyright (c) 2018-2019 dirs-rs contributors
@@ -632,11 +632,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## 6. Apache License 2.0 — 9 crate(s)
+## 6. Apache License 2.0 — 9 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`, `MIT OR Apache-2.0 OR Zlib`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - cursor-icon 1.2.0 — Copyright 2023 Kirill Chibisov
 - windows-link 0.2.1 — Copyright (c) Microsoft Corporation.
@@ -648,7 +648,7 @@ Crates, with the copyright notice each one ships:
 - windows_x86_64_msvc 0.48.5 — Copyright (c) Microsoft Corporation.
 - windows_x86_64_msvc 0.52.6 — Copyright (c) Microsoft Corporation.
 
-Full text as shipped by `cursor-icon 1.2.0` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `cursor-icon 1.2.0` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -854,11 +854,11 @@ Apache License
    limitations under the License.
 ```
 
-## 7. MIT License — 8 crate(s)
+## 7. MIT License — 8 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - windows-link 0.2.1 — Copyright (c) Microsoft Corporation.
 - windows-sys 0.48.0 — Copyright (c) Microsoft Corporation.
@@ -869,7 +869,7 @@ Crates, with the copyright notice each one ships:
 - windows_x86_64_msvc 0.48.5 — Copyright (c) Microsoft Corporation.
 - windows_x86_64_msvc 0.52.6 — Copyright (c) Microsoft Corporation.
 
-Full text as shipped by `windows-link 0.2.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `windows-link 0.2.1` (`license-mit`):
 
 ```
 MIT License
@@ -895,11 +895,11 @@ MIT License
     SOFTWARE
 ```
 
-## 8. Apache License 2.0 — 5 crate(s)
+## 8. Apache License 2.0 — 5 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - serde_spanned 1.1.2 — Copyright Individual contributors
 - toml 1.1.8+spec-1.1.0 — Copyright Individual contributors
@@ -907,7 +907,7 @@ Crates, with the copyright notice each one ships:
 - toml_parser 1.1.5+spec-1.1.0 — Copyright Individual contributors
 - toml_writer 1.1.3+spec-1.1.0 — Copyright Individual contributors
 
-Full text as shipped by `serde_spanned 1.1.2` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `serde_spanned 1.1.2` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -1113,18 +1113,18 @@ Apache License
    limitations under the License.
 ```
 
-## 9. MIT License — 4 crate(s)
+## 9. MIT License — 4 package(s)
 
 Declared SPDX: `MIT`, `MIT OR Apache-2.0`, `Unlicense OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - aho-corasick 1.1.5 — Copyright (c) 2015 Andrew Gallant
 - base64 0.22.1 — Copyright (c) 2015 Alice Maz
 - memchr 2.8.3 — Copyright (c) 2015 Andrew Gallant
 - nix 0.28.0 — Copyright (c) 2015 Carl Lerche + nix-rust Authors
 
-Full text as shipped by `aho-corasick 1.1.5` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `aho-corasick 1.1.5` (`LICENSE-MIT`):
 
 ```
 The MIT License (MIT)
@@ -1150,18 +1150,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## 10. Apache License 2.0 — 4 crate(s)
+## 10. Apache License 2.0 — 4 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - dirs 5.0.1 — (no copyright line in the license file)
 - dirs 6.0.0 — (no copyright line in the license file)
 - dirs-sys 0.4.1 — (no copyright line in the license file)
 - dirs-sys 0.5.0 — (no copyright line in the license file)
 
-Full text as shipped by `dirs 5.0.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `dirs 5.0.1` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -1340,18 +1340,18 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
    of your accepting any such warranty or additional liability.
 ```
 
-## 11. MIT License — 4 crate(s)
+## 11. MIT License — 4 package(s)
 
 Declared SPDX: `MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - filedescriptor 0.8.3 — Copyright (c) 2018 Wez Furlong
 - portable-pty 0.9.0 — Copyright (c) 2018 Wez Furlong
 - tokio 1.52.3 — Copyright (c) Tokio Contributors
 - tokio-macros 2.7.0 — Copyright (c) 2019 Yoshua Wuyts / Copyright (c) Tokio Contributors
 
-Full text as shipped by `filedescriptor 0.8.3` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `filedescriptor 0.8.3` (`LICENSE.md`):
 
 ```
 MIT License
@@ -1377,17 +1377,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## 12. Apache License 2.0 — 3 crate(s)
+## 12. Apache License 2.0 — 3 package(s)
 
 Declared SPDX: `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - linux-raw-sys 0.12.1 — (no copyright line in the license file)
 - rustix 1.1.5 — (no copyright line in the license file)
 - rustix-openpty 0.2.0 — (no copyright line in the license file)
 
-Full text as shipped by `linux-raw-sys 0.12.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `linux-raw-sys 0.12.1` (`LICENSE-Apache-2.0_WITH_LLVM-exception`):
 
 ```
 Apache License
@@ -1610,16 +1610,16 @@ the License, but only in their entirety and only with respect to the Combined
 Software.
 ```
 
-## 13. This project is dual-licensed under the Unlicense and MIT li — 2 crate(s)
+## 13. This project is dual-licensed under the Unlicense and MIT li — 2 package(s)
 
 Declared SPDX: `Unlicense OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - aho-corasick 1.1.5 — (no copyright line in the license file)
 - memchr 2.8.3 — (no copyright line in the license file)
 
-Full text as shipped by `aho-corasick 1.1.5` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `aho-corasick 1.1.5` (`COPYING`):
 
 ```
 This project is dual-licensed under the Unlicense and MIT licenses.
@@ -1627,16 +1627,16 @@ This project is dual-licensed under the Unlicense and MIT licenses.
 You may use this code under the terms of either license.
 ```
 
-## 14. The Unlicense (public domain) — 2 crate(s)
+## 14. The Unlicense (public domain) — 2 package(s)
 
 Declared SPDX: `Unlicense OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - aho-corasick 1.1.5 — (no copyright line in the license file)
 - memchr 2.8.3 — (no copyright line in the license file)
 
-Full text as shipped by `aho-corasick 1.1.5` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `aho-corasick 1.1.5` (`UNLICENSE`):
 
 ```
 This is free and unencumbered software released into the public domain.
@@ -1665,16 +1665,16 @@ OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>
 ```
 
-## 15. Apache License 2.0 — 2 crate(s)
+## 15. Apache License 2.0 — 2 package(s)
 
 Declared SPDX: `Apache-2.0/MIT`, `MIT/Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - downcast-rs 1.2.1 — (no copyright line in the license file)
 - shared_library 0.1.9 — (no copyright line in the license file)
 
-Full text as shipped by `downcast-rs 1.2.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `downcast-rs 1.2.1` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -1880,16 +1880,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 16. Apache License 2.0 — 2 crate(s)
+## 16. Apache License 2.0 — 2 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - futures-io 0.3.34 — Copyright (c) 2016 Alex Crichton / Copyright (c) 2017 The Tokio Authors
 - iana-time-zone 0.1.65 — Copyright 2020 Andrew Straw
 
-Full text as shipped by `futures-io 0.3.34` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `futures-io 0.3.34` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -2096,16 +2096,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 17. MIT License — 2 crate(s)
+## 17. MIT License — 2 package(s)
 
 Declared SPDX: `MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - mio 1.2.1 — Copyright (c) 2014 Carl Lerche and other MIO contributors
 - winreg 0.10.1 — Copyright (c) 2015 Igor Shaula
 
-Full text as shipped by `mio 1.2.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `mio 1.2.1` (`LICENSE`):
 
 ```
 Copyright (c) 2014 Carl Lerche and other MIO contributors
@@ -2129,15 +2129,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## 18. Apache License 2.0 — 1 crate(s)
+## 18. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - alacritty_terminal 0.26.0 — Copyright 2020 The Alacritty Project
 
-Full text as shipped by `alacritty_terminal 0.26.0` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `alacritty_terminal 0.26.0` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -2343,15 +2343,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 19. Apache License 2.0 — 1 crate(s)
+## 19. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `Apache-2.0 OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - atomic-waker 1.1.2 — Copyright (c) 2016 Alex Crichton / Copyright (c) 2017 The Tokio Authors / Copyright (c) 2016 Alex Crichton / Copyright (c) 2017 The Tokio Authors
 
-Full text as shipped by `atomic-waker 1.1.2` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `atomic-waker 1.1.2` (`LICENSE-THIRD-PARTY`):
 
 ```
 ===============================================================================
@@ -2401,15 +2401,15 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-## 20. Apache License 2.0 — 1 crate(s)
+## 20. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - chrono 0.4.45 — Copyright (c) 2014, Kang Seonghoon.
 
-Full text as shipped by `chrono 0.4.45` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `chrono 0.4.45` (`LICENSE.txt`):
 
 ```
 Rust-chrono is dual-licensed under The MIT License [1] and
@@ -2653,15 +2653,15 @@ limitations under the License.
 ~~~~
 ```
 
-## 21. MIT License — 1 crate(s)
+## 21. MIT License — 1 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - crossbeam-utils 0.8.23 — Copyright (c) 2019 The Crossbeam Project Developers
 
-Full text as shipped by `crossbeam-utils 0.8.23` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `crossbeam-utils 0.8.23` (`LICENSE-MIT`):
 
 ```
 The MIT License (MIT)
@@ -2693,15 +2693,15 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-## 22. MIT License — 1 crate(s)
+## 22. MIT License — 1 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0 OR Zlib`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - cursor-icon 1.2.0 — Copyright (c) 2023 Kirill Chibisov
 
-Full text as shipped by `cursor-icon 1.2.0` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `cursor-icon 1.2.0` (`LICENSE-MIT`):
 
 ```
 Copyright (c) 2023 Kirill Chibisov
@@ -2725,15 +2725,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## 23. Zlib License — 1 crate(s)
+## 23. Zlib License — 1 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0 OR Zlib`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - cursor-icon 1.2.0 — Copyright (c) 2023 Kirill Chibisov
 
-Full text as shipped by `cursor-icon 1.2.0` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `cursor-icon 1.2.0` (`LICENSE-ZLIB`):
 
 ```
 Copyright (c) 2023 Kirill Chibisov
@@ -2749,15 +2749,15 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-## 24. Apache License 2.0 — 1 crate(s)
+## 24. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - home 0.5.12 — (no copyright line in the license file)
 
-Full text as shipped by `home 0.5.12` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `home 0.5.12` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -2963,15 +2963,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 25. Apache License 2.0 — 1 crate(s)
+## 25. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - linux-raw-sys 0.12.1 — (no copyright line in the license file)
 
-Full text as shipped by `linux-raw-sys 0.12.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `linux-raw-sys 0.12.1` (`COPYRIGHT`):
 
 ```
 Short version for non-lawyers:
@@ -3005,15 +3005,15 @@ is licensed under:
 at your option.
 ```
 
-## 26. Mozilla Public License 2.0 — 1 crate(s)
+## 26. Mozilla Public License 2.0 — 1 package(s)
 
 Declared SPDX: `MPL-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - option-ext 0.2.0 — (no copyright line in the license file)
 
-Full text as shipped by `option-ext 0.2.0` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `option-ext 0.2.0` (`LICENSE.txt`):
 
 ```
 Mozilla Public License Version 2.0
@@ -3391,15 +3391,15 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
   defined by the Mozilla Public License, v. 2.0.
 ```
 
-## 27. Apache License 2.0 — 1 crate(s)
+## 27. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `Apache-2.0 OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - pin-project-lite 0.2.17 — (no copyright line in the license file)
 
-Full text as shipped by `pin-project-lite 0.2.17` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `pin-project-lite 0.2.17` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -3580,15 +3580,85 @@ Apache License
    END OF TERMS AND CONDITIONS
 ```
 
-## 28. Apache License 2.0 — 1 crate(s)
+## 28. MIT License — 1 package(s)
+
+Declared SPDX: `MIT OR Apache-2.0`
+
+Packages, with the copyright notice each one ships:
+
+- regex-syntax 0.8.11 (src/unicode_tables/LICENSE-UNICODE) — Copyright © 1991-2018 Unicode, Inc. All rights reserved.
+
+Full text as shipped by `regex-syntax 0.8.11` (`src/unicode_tables/LICENSE-UNICODE`):
+
+```
+UNICODE, INC. LICENSE AGREEMENT - DATA FILES AND SOFTWARE
+
+Unicode Data Files include all data files under the directories
+http://www.unicode.org/Public/, http://www.unicode.org/reports/,
+http://www.unicode.org/cldr/data/, http://source.icu-project.org/repos/icu/, and
+http://www.unicode.org/utility/trac/browser/.
+
+Unicode Data Files do not include PDF online code charts under the
+directory http://www.unicode.org/Public/.
+
+Software includes any source code published in the Unicode Standard
+or under the directories
+http://www.unicode.org/Public/, http://www.unicode.org/reports/,
+http://www.unicode.org/cldr/data/, http://source.icu-project.org/repos/icu/, and
+http://www.unicode.org/utility/trac/browser/.
+
+NOTICE TO USER: Carefully read the following legal agreement.
+BY DOWNLOADING, INSTALLING, COPYING OR OTHERWISE USING UNICODE INC.'S
+DATA FILES ("DATA FILES"), AND/OR SOFTWARE ("SOFTWARE"),
+YOU UNEQUIVOCALLY ACCEPT, AND AGREE TO BE BOUND BY, ALL OF THE
+TERMS AND CONDITIONS OF THIS AGREEMENT.
+IF YOU DO NOT AGREE, DO NOT DOWNLOAD, INSTALL, COPY, DISTRIBUTE OR USE
+THE DATA FILES OR SOFTWARE.
+
+COPYRIGHT AND PERMISSION NOTICE
+
+Copyright © 1991-2018 Unicode, Inc. All rights reserved.
+Distributed under the Terms of Use in http://www.unicode.org/copyright.html.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Unicode data files and any associated documentation
+(the "Data Files") or Unicode software and any associated documentation
+(the "Software") to deal in the Data Files or Software
+without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, and/or sell copies of
+the Data Files or Software, and to permit persons to whom the Data Files
+or Software are furnished to do so, provided that either
+(a) this copyright and permission notice appear with all copies
+of the Data Files or Software, or
+(b) this copyright and permission notice appear in associated
+Documentation.
+
+THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT OF THIRD PARTY RIGHTS.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS INCLUDED IN THIS
+NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR CONSEQUENTIAL
+DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THE DATA FILES OR SOFTWARE.
+
+Except as contained in this notice, the name of a copyright holder
+shall not be used in advertising or otherwise to promote the sale,
+use or other dealings in these Data Files or Software without prior
+written authorization of the copyright holder.
+```
+
+## 29. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - rustix 1.1.5 — (no copyright line in the license file)
 
-Full text as shipped by `rustix 1.1.5` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `rustix 1.1.5` (`COPYRIGHT`):
 
 ```
 Short version for non-lawyers:
@@ -3622,15 +3692,15 @@ is licensed under:
 at your option.
 ```
 
-## 29. Apache License 2.0 — 1 crate(s)
+## 30. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - rustix-openpty 0.2.0 — (no copyright line in the license file)
 
-Full text as shipped by `rustix-openpty 0.2.0` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `rustix-openpty 0.2.0` (`COPYRIGHT`):
 
 ```
 Short version for non-lawyers:
@@ -3664,15 +3734,15 @@ is licensed under:
 at your option.
 ```
 
-## 30. Apache License 2.0 — 1 crate(s)
+## 31. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `BSD-2-Clause OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - serial2 0.2.37 — Copyright 2021, Maarten de Vries <maarten@de-vri.es>
 
-Full text as shipped by `serial2 0.2.37` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `serial2 0.2.37` (`LICENSE-APACHE`):
 
 ```
 Copyright 2021, Maarten de Vries <maarten@de-vri.es>
@@ -3690,15 +3760,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 31. BSD 2-Clause — 1 crate(s)
+## 32. BSD 2-Clause — 1 package(s)
 
 Declared SPDX: `BSD-2-Clause OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - serial2 0.2.37 — Copyright (c) 2021, Maarten de Vries <maarten@de-vri.es>
 
-Full text as shipped by `serial2 0.2.37` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `serial2 0.2.37` (`LICENSE-BSD`):
 
 ```
 BSD 2-Clause License
@@ -3727,15 +3797,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## 32. Apache License 2.0 — 1 crate(s)
+## 33. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `MIT/Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - shell-words 1.1.1 — (no copyright line in the license file)
 
-Full text as shipped by `shell-words 1.1.1` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `shell-words 1.1.1` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -3941,15 +4011,15 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-## 33. MIT License — 1 crate(s)
+## 34. MIT License — 1 package(s)
 
 Declared SPDX: `(MIT OR Apache-2.0) AND Unicode-3.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - unicode-ident 1.0.24 — Copyright © 1991-2023 Unicode, Inc.
 
-Full text as shipped by `unicode-ident 1.0.24` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `unicode-ident 1.0.24` (`LICENSE-UNICODE`):
 
 ```
 UNICODE LICENSE V3
@@ -3993,15 +4063,15 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 ```
 
-## 34. Apache License 2.0 — 1 crate(s)
+## 35. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `MIT OR Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - unicode-width 0.2.2 — (no copyright line in the license file)
 
-Full text as shipped by `unicode-width 0.2.2` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `unicode-width 0.2.2` (`COPYRIGHT`):
 
 ```
 Licensed under the Apache License, Version 2.0
@@ -4013,15 +4083,15 @@ notice may not be copied, modified, or distributed except
 according to those terms.
 ```
 
-## 35. Apache License 2.0 — 1 crate(s)
+## 36. Apache License 2.0 — 1 package(s)
 
 Declared SPDX: `MIT/Apache-2.0`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - winapi 0.3.9 — (no copyright line in the license file)
 
-Full text as shipped by `winapi 0.3.9` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `winapi 0.3.9` (`LICENSE-APACHE`):
 
 ```
 Apache License
@@ -4227,15 +4297,15 @@ Apache License
    limitations under the License.
 ```
 
-## 36. MIT License — 1 crate(s)
+## 37. MIT License — 1 package(s)
 
 Declared SPDX: `MIT`
 
-Crates, with the copyright notice each one ships:
+Packages, with the copyright notice each one ships:
 
 - winnow 1.0.4 — (no copyright line in the license file)
 
-Full text as shipped by `winnow 1.0.4` (byte-identical for every crate above, apart from the copyright line):
+Full text as shipped by `winnow 1.0.4` (`LICENSE-MIT`):
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining
