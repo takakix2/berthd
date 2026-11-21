@@ -184,6 +184,7 @@ The resulting sessions can also be attached independently from separate terminal
 | `BERTHD_SHELL` | Shell executable to spawn for new sessions (see "Shell Resolution Order" below). Recognized in both client and daemon environments, with client-side setting taking precedence. |
 | `BERTHD_JOURNAL_PATH` | Path to the audit journal file (default: `~/.berth/journal.jsonl`). |
 | `BERTHD_SESSION` | Session ID injected into child shell processes by `berthd`. |
+| `BERTHD_NO_SESSION_SCOPE` | Linux only. By default each session's shell is moved into its own transient systemd scope (`berthd-session-<pid>-<n>.scope`), so that when systemd-oomd stops a session for memory pressure it stops that session alone, not `berthd` and every other session. Set to `1` to keep sessions in `berthd`'s own cgroup. Without a systemd user manager, sessions stay there automatically. |
 | `BERTH_SCROLLBACK` | Set to `off` (`0`, `no`, or `false`) to disable scrollback replay upon attach (equivalent to always passing `--no-scrollback`). |
 | `AUDIT_ACTOR` | Actor identity claimed by `berth` on attach (recorded in the journal's `actor` field). Intended for administrative labeling and audit tooling. |
 

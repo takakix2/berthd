@@ -172,6 +172,7 @@ wezterm cli split-pane --right -- berth attach build
 | `BERTHD_SHELL`        | 新規セッションで起動するシェル（後述の「起動シェルの決定優先順位」を参照）。クライアント実行環境とデーモン環境の双方で認識され、クライアント側が優先されます。                   |
 | `BERTHD_JOURNAL_PATH` | ジャーナルファイルの出力先パス（デフォルト: `~/.berth/journal.jsonl`）。                                                                                                        |
 | `BERTHD_SESSION`      | **デーモンが子プロセス（シェル）へ注入する**セッション ID。                                                                                                                      |
+| `BERTHD_NO_SESSION_SCOPE` | Linux のみ。既定では、セッションごとにシェルを専用の systemd の一時スコープ（`berthd-session-<pid>-<連番>.scope`）へ移します。systemd-oomd がメモリ圧迫でセッションを止めるとき、止まるのはそのセッションだけになり、`berthd` やほかのセッションは残ります。`1` に設定すると、セッションを `berthd` 自身の cgroup に残します。systemd のユーザーマネージャーが無い環境では、自動的にそちらに残ります。 |
 | `BERTH_SCROLLBACK`    | `off`（`0` / `no` / `false` も可）に設定すると、アタッチ時のスクロールバック再生を無効化します（`--no-scrollback` を常時指定した状態と同等）。                                   |
 | `AUDIT_ACTOR`         | アタッチ時にクライアントが名乗る識別名（ジャーナルの `actor` 欄）。運用管理者や監査ツール等による設定を想定しています。                                                         |
 
