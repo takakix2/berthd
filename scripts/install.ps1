@@ -3,17 +3,16 @@
 #   irm https://raw.githubusercontent.com/takakix2/berthd/main/scripts/install.ps1 | iex
 #
 # Nothing to install first on a stock Windows 10+: curl.exe and tar.exe (bsdtar)
-# are in System32 (measured 2026-09-17), and bsdtar reads the .zip we ship.
+# are in System32, and bsdtar reads the .zip we ship.
 #
-# THIS FILE MUST STAY ASCII-ONLY AND WITHOUT A BOM (berthd #50, measured 2026-10-10
-# on Windows PowerShell 5.1.26100):
+# THIS FILE MUST STAY ASCII-ONLY AND WITHOUT A BOM (Windows PowerShell 5.1):
 #   - With a BOM, `irm | iex` breaks: irm keeps U+FEFF at the start of the string,
 #     the parser takes it as a statement before `param(...)`, and the whole script
 #     fails to parse -- nothing is installed. ([scriptblock]::Create fails the same way.)
 #   - Without a BOM, 5.1 reads a saved .ps1 in the ANSI code page, so any non-ASCII
-#     text (Japanese, emoji) breaks parsing when run as a file (13 errors measured).
+#     text breaks parsing when run as a file.
 #   - ASCII is the only encoding both paths read the same. scripts/check-install-ps1.sh
-#     checks this, and publish-snapshot runs it.
+#     checks this before every publish.
 #
 # Same four requirements as install.sh (change one, change both):
 #   1. Say what is installed now and what is about to be installed.
@@ -69,13 +68,13 @@ function Die {
 #
 # Do NOT read $env:PROCESSOR_ARCHITECTURE: it describes this *process*, and an
 # emulated x64 PowerShell on ARM64 answers AMD64. RuntimeInformation::OSArchitecture
-# describes the OS (works on 5.1, measured 2026-09-18; values X86 / X64 / Arm / Arm64).
+# describes the OS (works on 5.1; values X86 / X64 / Arm / Arm64).
 if (-not $Target) {
     $osArch = "$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)"
     if ($osArch -eq "X64") {
         $Target = "windows-x86_64"
     } elseif ($osArch -eq "Arm64") {
-        # ARM builds are for later (decided 2026-09-18). The x64 build *runs* under
+        # ARM builds are not shipped yet. The x64 build *runs* under
         # emulation, so installing it silently gives "installed but slow" with no
         # visible cause. Say so and refuse.
         Die ("No ARM64 build is published yet.`n" +
@@ -196,8 +195,8 @@ foreach ($b in @("berthd", "berth")) {
     if (Test-Path $o) { try { Remove-Item $o -Force } catch { } }
 }
 
-# A running executable cannot be overwritten through the native API (measured
-# 2026-09-17): DeleteFileW / MoveFileExW -- what .NET and PowerShell use -- get
+# A running executable cannot be overwritten through the native API:
+# DeleteFileW / MoveFileExW -- what .NET and PowerShell use -- get
 # "access denied". Renaming it aside DOES work, and placing the new one after that
 # works too. The renamed one cannot be deleted while it runs, so the next run sweeps it.
 # (MSYS `mv` uses Windows 10 POSIX delete, so install.sh needs none of this.)
@@ -209,7 +208,7 @@ foreach ($b in @("berthd", "berth")) {
     $placed = $false
     # Not [System.IO.File]::Move: 5.1's .NET Framework has no overwrite overload,
     # so it fails whenever the target exists and would leave a .old every time
-    # (found by a control run, 2026-09-17). Move-Item -Force uses
+    # (found by a control run). Move-Item -Force uses
     # MOVEFILE_REPLACE_EXISTING, which fails only while the file is in use --
     # the only case that needs moving aside.
     try { Move-Item -LiteralPath $new -Destination $dst -Force -ErrorAction Stop; $placed = $true } catch { }

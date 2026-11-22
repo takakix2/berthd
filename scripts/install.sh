@@ -1,22 +1,21 @@
 #!/bin/sh
-# berthd installer —— berthd（デーモン）と berth（CLI）を **対で** 入れる。
+# berthd installer —— berthd（デーモン）と berth（CLI）を 対で 入れる。
 #
-# ⭐ **POSIX sh で書く。** 配り方が `curl … | sh` なので、相手のシェルを選べない
+# POSIX sh で書く。 配り方が `curl … | sh` なので、相手のシェルを選べない
 #    （macOS の `/bin/sh` / dash / busybox）。⚠️ bash 前提の書き方は使わない
 #    （配列・`local`・`[[ ]]`・`${var,,}`）。
 #
-# 📌 **要件は 4 本**。④ は実際に配ったときに見つかった —— 走っている旧デーモンを
-#    検出しながら、その出力を見ずに旧バイナリを消していた。セッションが在れば
-#    「触れないまま生きている PTY」を作っていた。∴ **④を先頭に置く。**
+# 要件は 4 本。④ は先頭に置く —— 走っているデーモンを止めずに旧バイナリを消すと、
+#    セッションが在るときに「触れないまま生きている PTY」を作る。
 #
 #   ① 入れる前に「いま在る物」と「これから入れる物」を名乗る（`--version` の括弧＝ build hash）
 #   ② 旧 `argo` / `argod` を消す（残すと旧名が動き続ける）
 #   ③ 対で置く（片方だけは通さない）
 #   ④ 走っているデーモンを先に停止する
 #
-# 🚨 **版の文字列では対を判定できない。** `argo 0.1.0 (c15f9b812)` と
+# 🚨 版の文字列では対を判定できない。 `argo 0.1.0 (c15f9b812)` と
 #    `argod 0.1.0 (2ec5ef8d0)` のように、版が同じでも別の build が同居しうる ——
-#    **見分けが付くのは括弧の中だけ**。∴ 対の判定は hash でやる。
+#    見分けが付くのは括弧の中だけ。∴ 対の判定は hash でやる。
 
 set -eu
 
@@ -28,24 +27,24 @@ err()  { printf '%s\n' "$*" >&2; }
 die()  { err ""; err "🚨 $*"; exit 1; }
 
 # ── 置き場 ──────────────────────────────────────────────────────
-# ⭐ `~/.local/bin` に**実体**を置く（symlink ではない）。
-# ⚠️ `$PATH` に無ければ**入れた後に言う**（入れる前に断ると、直してから入れ直す羽目になる）。
+# `~/.local/bin` に実体を置く（symlink ではない）。
+# ⚠️ `$PATH` に無ければ入れた後に言う（入れる前に断ると、直してから入れ直す羽目になる）。
 pick_dir() {
     if [ -n "${BERTHD_INSTALL_DIR:-}" ]; then printf '%s' "$BERTHD_INSTALL_DIR"; return; fi
     printf '%s' "${HOME}/.local/bin"
 }
 
 # ── 対象を判定 ──────────────────────────────────────────────────
-# ⚠️ **配っている対象だけを名乗る。** 判定できない環境に「たぶんこれ」を当てない ——
-#    ⭐ 違う環境のバイナリを入れると `Exec format error` で、原因が installer に見えない。
+# ⚠️ 配っている対象だけを名乗る。 判定できない環境に「たぶんこれ」を当てない ——
+#    違う環境のバイナリを入れると `Exec format error` で、原因が installer に見えない。
 detect_target() {
     os=$(uname -s); arch=$(uname -m)
     case "$os" in
         Linux)  case "$arch" in x86_64|amd64) printf 'linux-x86_64' ;; *) die "この環境向けはまだ配っていません: $os/$arch" ;; esac ;;
         Darwin) case "$arch" in arm64|aarch64) printf 'macos-arm64' ;; *) die "この環境向けはまだ配っていません: $os/${arch}（Intel Mac は未配布）" ;; esac ;;
-        # 🧑 **Windows はこの入口を使わないと決めた**（2026-09-18）—— 面ごとに入口は 1 つ。
-        # ⭐ あちらは素の Windows で前提ゼロになる（`curl` も `tar` も System32 に在る）ので、
-        #   git-bash を経由させる理由が無い。🚫 ここに Windows の腕を置かない。
+        # Windows はこの入口を使わない —— 面ごとに入口は 1 つ（あちらは install.ps1）。
+        # 素の Windows で前提ゼロになる（`curl` も `tar` も System32 に在る）ので、
+        #   git-bash を経由させる理由が無い。ここに Windows の腕を置かない。
         MINGW*|MSYS*|CYGWIN*) die "Windows は PowerShell の入口を使ってください:
    irm https://raw.githubusercontent.com/$REPO/main/scripts/install.ps1 | iex" ;;
         *) die "この環境向けはまだ配っていません: ${os}" ;;
@@ -53,7 +52,7 @@ detect_target() {
 }
 
 # ── いま入っている物を名乗る（要件①）─────────────────────────────
-# ⭐ 綴りは `<name> <semver> (<hash>)`。読む側は括弧を見るだけ。
+# 綴りは `<name> <semver> (<hash>)`。読む側は括弧を見るだけ。
 report_current() {
     _dir=$1; _found=0
     for b in berth berthd argo argod; do
@@ -77,15 +76,15 @@ main() {
     say ""
 
     # ── ④ 走っているデーモンを先に停止する ──────────────────────
-    # 🚨 **消してから気づいても遅い。** 旧 CLI を消した後だと、生きている PTY に
+    # 🚨 消してから気づいても遅い。 旧 CLI を消した後だと、生きている PTY に
     #    触る道具が無くなる（新しい CLI は別の端点を見るので気づけもしない）。
-    # ⭐ 停止する前に**セッション数を見せる**。0 でなければ**こちらから停止しない** ——
+    # 停止する前にセッション数を見せる。0 でなければこちらから停止しない ——
     #    人のシェルを落とす判断は installer がして良いものではない。
     for old in berth argo; do
         [ -x "$dir/$old" ] || continue
-        # 🚨 **`2>/dev/null` は飾りではなく、この数え方の前提。** 版が食い違うとき
-        #    CLI は skew の警告を **stderr** に 3 行出す ——
-        #    ⭐ それを数えると「セッション 3 つ」に見えて、**まさにその入れ替えを拒否する**。
+        # 🚨 `2>/dev/null` は飾りではなく、この数え方の前提。 版が食い違うとき
+        #    CLI は skew の警告を stderr に 3 行出す ——
+        #    それを数えると「セッション 3 つ」に見えて、まさにその入れ替えを拒否する。
         if sessions=$("$dir/$old" ls 2>/dev/null); then
             n=$(printf '%s\n' "$sessions" | grep -cv '^no .* sessions$' || true)
             if [ "${n:-0}" -gt 0 ] 2>/dev/null; then
@@ -106,8 +105,8 @@ main() {
     [ -n "$tag" ] || die "最新の release を引けませんでした（${REPO}）"
     say "   版:     $tag"
 
-    # 🚨 **改名前の release を黙って入れない。** v0.1.x の tarball の中身は `argod`/`argo` で、
-    #    入れると**この installer が消した名前がそのまま戻る**。⭐ 断る方が親切。
+    # 🚨 改名前の release を黙って入れない。 v0.1.x の tarball の中身は `argod`/`argo` で、
+    #    入れるとこの installer が消した名前がそのまま戻る。断る方が親切。
     case "$tag" in
         v0.1.*|v0.0.*) die "$tag は改名前の release です（中身は \`argod\` / \`argo\`）。
    ⭐ \`berthd\` / \`berth\` は **$MIN_TAG から**です。" ;;
@@ -122,8 +121,8 @@ main() {
     curl -fsSL "$base/SHA256SUMS"  -o "$tmp/SHA256SUMS" || die "SHA256SUMS を落とせませんでした"
 
     # ── 検算 ────────────────────────────────────────────────────
-    # ⚠️ **検算できない環境では止める**（`sha256sum` も `shasum` も無い）——
-    #    ⭐ 「検算しなかった」と「検算に通った」を同じ見た目にしない。
+    # ⚠️ 検算できない環境では止める（`sha256sum` も `shasum` も無い）——
+    #    「検算しなかった」と「検算に通った」を同じ見た目にしない。
     ( cd "$tmp" || exit 1
       if command -v sha256sum >/dev/null 2>&1; then
           grep " $asset\$" SHA256SUMS | sha256sum -c - >/dev/null
@@ -140,7 +139,7 @@ main() {
 
     # ── 展開（🚨 中身は 1 段深い）──────────────────────────────
     # tarball は `berthd-<版>-<対象>/` に展開される（カレントに `berthd` は出来ない）。
-    # ⭐ ∴ 展開先を**当てずに探す**。
+    # ∴ 展開先を当てずに探す。
     tar xzf "$tmp/$asset" -C "$tmp"
     src=$(find "$tmp" -maxdepth 2 -type f -name berthd | head -1)
     [ -n "$src" ] || die "tarball の中に berthd が見つかりません（中身が変わった？）"
@@ -155,13 +154,13 @@ main() {
     done
 
     # ── ② 旧名を消す ────────────────────────────────────────────
-    # 🚨 残すと**旧名が動き続ける**。しかも旧 `argo` は新 `berthd` と端点も
-    #    プロトコル版も食い違うので、「動く」ではなく「**中途半端に動く**」。
+    # 🚨 残すと旧名が動き続ける。しかも旧 `argo` は新 `berthd` と端点も
+    #    プロトコル版も食い違うので、「動く」ではなく「中途半端に動く」。
     removed=""
     for old in argo argod; do
-        # ⚠️ **`rm -f "$dir/$old".bak*` を直に書かない。** 🚨 zsh は未マッチの glob で
-        #    **コマンド行ごと中止する**（bash の既定と違う）—— `.bak` が無いと `rm` が 1 度も走らない。
-        #    ⭐ ここは `sh` で走るが、**書き方でシェル方言に依らせない**。
+        # ⚠️ `rm -f "$dir/$old".bak*` を直に書かない。 🚨 zsh は未マッチの glob で
+        #    コマンド行ごと中止する（bash の既定と違う）—— `.bak` が無いと `rm` が 1 度も走らない。
+        #    ここは `sh` で走るが、書き方でシェル方言に依らせない。
         for f in "$dir/$old" "$dir/$old".bak*; do
             [ -e "$f" ] || continue
             rm -f "$f"; removed="$removed $(basename "$f")"
@@ -169,13 +168,13 @@ main() {
     done
     [ -z "$removed" ] || say "   ② 旧名を削除:$removed"
 
-    # 🚨 **「消した」ではなく「消えている」を確かめる**。
-    # ⭐ `rm` が走らなかった / 権限で失敗した / 別の置き場にもう 1 本在った、は
-    #    どれも**同じ静けさ**になる。∴ 結果を見る。
+    # 🚨 「消した」ではなく「消えている」を確かめる。
+    # `rm` が走らなかった / 権限で失敗した / 別の置き場にもう 1 本在った、は
+    #    どれも同じ静けさになる。∴ 結果を見る。
     left=""
     for old in argo argod; do
         [ -e "$dir/$old" ] && left="$left $dir/$old"
-        # ⚠️ **PATH の別の場所**に旧名が残っていないか（この置き場だけ掃除しても、
+        # ⚠️ PATH の別の場所に旧名が残っていないか（この置き場だけ掃除しても、
         #    別の bin ディレクトリの古い argo が勝つ環境が在りうる）。
         p=$(command -v "$old" 2>/dev/null || true)
         [ -n "$p" ] && left="$left $p"
@@ -202,7 +201,7 @@ main() {
         exit 1
     fi
 
-    # ⚠️ PATH の警告は**最後に**（入れる前に断らない）。
+    # ⚠️ PATH の警告は最後に（入れる前に断らない）。
     case ":${PATH}:" in
         *":$dir:"*) : ;;
         *) say ""
@@ -211,9 +210,9 @@ main() {
     esac
     say ""
     say "   ▶ berth attach work    （berthd は要るときに自分で起きます）"
-    # 📌 **`berth ls` / `berth info` は確認にならない** ——
-    #    どちらも**デーモンを起こさない設計**なので、「入れ替えが済んで静かな状態」と
-    #    「壊れている状態」が同じ文言を返す。⭐ 往復を見たいなら**起こす操作**が要る。
+    # `berth ls` / `berth info` は確認にならない ——
+    #    どちらもデーモンを起こさない設計なので、「入れ替えが済んで静かな状態」と
+    #    「壊れている状態」が同じ文言を返す。往復を見たいなら起こす操作が要る。
     say "      ⚠️ ls / info はデーモンを起こさないので、動作確認にはなりません。"
     say "         往復を確かめるなら attach を実行してください。"
 }
