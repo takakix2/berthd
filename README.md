@@ -273,6 +273,50 @@ On Windows, the named pipe (`\\.\pipe\berthd-<user>`) is guarded by an owner-onl
 
 ---
 
+## Project Structure
+
+```text
+berthd/
+├── src/
+│   ├── lib.rs                    # Shared library root
+│   ├── config.rs                 # ~/.berth/config.toml parser and tilde expansion
+│   ├── journal.rs                # NDJSON audit journal writer
+│   ├── listener.rs               # Unix domain socket / Windows named pipe listener
+│   ├── peer.rs                   # Peer credential and process ancestry inspection
+│   ├── replay_head.rs            # Terminal state summary for truncated scrollback
+│   ├── shell.rs                  # Cross-platform shell resolution
+│   ├── win_pipe_acl.rs           # Owner-only DACL and server SID verification (Windows)
+│   ├── winproc.rs                # Console-less daemon spawn helpers (Windows)
+│   └── bin/
+│       ├── berth/                # CLI client (`berth`)
+│       │   ├── main.rs           # Entry point and command dispatch
+│       │   ├── wire.rs           # Daemon connection, handshake, and control requests
+│       │   ├── daemon_start.rs   # Auto-spawning berthd (and systemd scope on Linux)
+│       │   ├── commands.rs       # Subcommands (ls, info, rename, detach, kill, kill-server)
+│       │   ├── attach.rs         # Interactive attach loop
+│       │   └── attach/           # Argument parsing, raw mode, alt-screen, pane cache, replay
+│       └── berthd/               # Headless PTY daemon (`berthd`)
+│           ├── main.rs           # Entry point, accept loop, and shutdown
+│           ├── session.rs        # Session table, naming, and live state queries
+│           ├── spawn.rs          # PTY allocation and shell process creation
+│           ├── pty_loop.rs       # PTY I/O multiplexing and exit handling
+│           ├── output.rs         # Output ring buffer, viewer fan-out, slow-viewer eviction
+│           ├── conn.rs           # Per-client connection handler
+│           ├── attach.rs         # Attach handshake and scrollback/head replay
+│           ├── sanitize.rs       # Query sequence filtering for replayed output
+│           ├── session_scope.rs  # Per-session systemd user scope isolation (Linux)
+│           └── launch_job.rs     # Job Object process-tree cleanup (Windows)
+├── crates/
+│   ├── berth-protocol/           # Wire protocol: frame codec, control messages, endpoints
+│   └── berth-screen/             # Offscreen VT renderer for `--no-scrollback` replay
+├── tests/                        # Integration test suites
+├── dist/                         # Service unit templates (systemd / launchd)
+├── scripts/                      # Installers (`install.sh`, `install.ps1`)
+└── assets/                       # Logos and icons
+```
+
+---
+
 ## License
 
 ISC License ([LICENSE](LICENSE)). Third-party library licenses and attributions are documented in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

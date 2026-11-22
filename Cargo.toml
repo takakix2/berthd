@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────
+# workspace。root は berthd（デーモン + `berth` CLI）で、`crates/berth-screen` が
+# `berth attach` の scrollback 再生（alacritty_terminal を 1 回だけ回す）を持つ。
+# 別 crate にした理由は「使わない人は一度も通らない」と「berthd の『描画を持たない』芯を崩さない」。
+# release のビルドは `--bin berthd --bin berth` だけを焼く。
+[workspace]
+members = ["crates/berth-protocol", "crates/berth-screen"]
+
+[package]
+name = "berthd"
+version = "0.6.7-dev"
+edition = "2021"
+# ISC（tmux と同じ）。client と server を持つ多重化ツールという同じ棚なので、相手を tmux に取った。
+license = "ISC"
+description = "berthd — セッションサーバー（PTY を所有する headless デーモン + unix socket）と、それを操る berth CLI。"
+
+[lib]
+name = "berthd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "berthd"
+path = "src/bin/berthd/main.rs"
+
+# `berth`（セッション操作 CLI）。どのシェル（zsh / fish / bash …）からでも打てることが存在理由なので、
+# シェルの builtin ではなく独立バイナリにする（tmux の `tmux` コマンドと同じ）。
+[[bin]]
+name = "berth"
+path = "src/bin/berth/main.rs"
+
+[dependencies]
+# ワイヤの契約（フレームと制御メッセージ）。デーモンの実装とは別の crate に置いてある。
+berth-protocol = { path = "crates/berth-protocol" }
+portable-pty = "0.9.0"
+# io-std = 対話 attach（`berth attach`）の stdin/stdout / signal = SIGWINCH でリサイズ。
+tokio = { version = "1.52.2", features = ["sync", "rt", "rt-multi-thread", "macros", "net", "time", "io-util", "io-std", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+dirs = "6.0.0"
+# attach の合図を右寄せする桁を表示幅で測る（名前に全角が在りうる）。alacritty_terminal 経由で既に木に居る。
+unicode-width = "0.2"
+# `berth attach` の scrollback 再生。入り直す瞬間に録画を端末エミュレータへ 1 回通す側。
+#    berthd（デーモン）はこれを使わない（格子を持つのはクライアントだけ）。
+berth-screen = { path = "crates/berth-screen" }
+toml = "1.1.8"
+
+# 重要: Windows は「プロセスが死ねば子も死ぬ」ではない。ConPTY は別プロセスのホスト
+# （`OpenConsole.exe`）を立てるので、berthd が強制終了されると Rust の `Drop` は走らず、
+# ホストが CPU を回したまま孤児になる。Job Object（kill-on-close）は `Drop` に依らず、OS が木ごと畳む。
+# windows-sys は既に依存木に居る（推移的に v0.61）ので、直に引いても増えない。
+[target.'cfg(windows)'.dependencies.windows-sys]
+version = "0.61"
+# Pipes / RemoteDesktop: 名前付きパイプの向こうの pid と Windows の session id を訊く。
+features = [
+    "Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading",
+    "Win32_System_Pipes", "Win32_System_RemoteDesktop",
+    # Console: raw mode と窓の大きさ。
+    "Win32_System_Console",
+    # Security 系: 口（名前付きパイプ）に鍵を付ける。
+    # `Win32_Security` で `OpenProcessToken` / `GetTokenInformation(TokenUser)`、
+    # `Win32_Security_Authorization` で `ConvertSidToStringSidW` と SDDL の変換。
+    # `Win32_Storage_FileSystem` は検体の側が要る（匿名で `CreateFileW` を撃って断られること）。
+    "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem",
+    # LibraryLoader: 裸の名前の LoadLibrary から PATH を外す。
+    "Win32_System_LibraryLoader",
+    # ToolHelp: attach してきた相手の親の並びを取る。
+    "Win32_System_Diagnostics_ToolHelp",
+]
+
+[target.'cfg(unix)'.dependencies]
+# libc: macOS の cwd 引き（proc_pidinfo）＋ 対話 attach の termios raw モード / isatty / TIOCGWINSZ。
+# 後者は Linux でも要るので cfg(unix) にする（Linux の cwd は /proc なので libc 不要のまま）。
+# 重要: 0.2.189 以上が要る。親の並びを引くのに使う `proc_bsdshortinfo` / `PROC_PIDT_SHORTBSDINFO`
+# （root の持ち物も読める短い版）は 0.2.186 には無い。範囲を `"0.2"` のままにすると、
+# 古い lock では「型が無い」とだけ言われて理由が読めない。
+libc = "0.2.189"

@@ -1,0 +1,228 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── 焼く前に確かめる ────────────────────────────────────────────
+  # 重要: 4 ターゲット焼いてから落ちても遅いので、独立 job にして build を待たせる。
+  # 抜け道は置かない（配布物は「意図の表明」で通してよい類ではない）。
+  guard:
+    name: Verify tag, version, faces and licence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches version, and carries no pre-release marker
+        run: |
+          set -eu
+          TAG="${GITHUB_REF#refs/tags/}"
+          # 注意: 版は `[package]` の節に在る。
+          #    節を絞ってから読む（`grep -m1 '^version'` だと別テーブルを拾いうる）。
+          VERSION="$(awk '/^\[package\]/{f=1;next} /^\[/{f=0} f && /^version *=/{gsub(/.*= *"|"/,""); print; exit}' Cargo.toml)"
+          echo "tag=${TAG}  version=${VERSION}"
+          [ -n "${VERSION}" ] || { echo "::error::[package] の version を読めません"; exit 1; }
+          case "${VERSION}" in
+            *-*|*+*) echo "::error::version '${VERSION}' がまだ pre-release 印を持っています。"
+                     echo "::error::出す commit で外してから tag を打つこと（配ったバイナリが -dev を名乗ってはいけない）。"
+                     exit 1 ;;
+          esac
+          [ "${TAG}" = "v${VERSION}" ] || {
+            echo "::error::tag '${TAG}' と version '${VERSION}' が食い違います。"
+            echo "::error::アーカイブの名前と中身が別の版になります。"; exit 1; }
+          echo "✅ ${TAG} == v${VERSION}"
+
+      # 重要: 面の一覧が 2 箇所に手写しされている（この matrix と `scripts/install.sh` の
+      #    `detect_target`）。片方だけ増えると、installer が「配っていない面です」と
+      #    断る面を release が並べる / release に無い面を installer が落としに行く。
+      #    どちらも「壊れた」とは見えない形（前者は親切な拒否・後者は 404）なので、
+      #    食い違いを機械が見る。
+      - name: The faces in this workflow are exactly the faces the installers accept
+        run: |
+          set -eu
+          W=$(grep -oE 'face: [a-z0-9_-]+' .github/workflows/release.yml | awk '{print $2}' | sort -u)
+          # 入口は面ごとに 1 つ（unix は install.sh、Windows は install.ps1）。両方と突き合わせる
+          # （片方だけを見ると、もう片方の面を配り始めてもこの guard が黙る）。
+          I=$( { grep -oE "printf '(linux|macos|windows)[a-z0-9_-]*'" scripts/install.sh \
+                   | sed "s/printf '//; s/'//"
+                 grep -oE '\$Target = "(linux|macos|windows)[a-z0-9_-]*"' scripts/install.ps1 \
+                   | sed 's/.*= "//; s/"//'; } | sort -u)
+          echo "workflow : $(echo $W)"; echo "install.sh: $(echo $I)"
+          [ "$W" = "$I" ] || { echo "::error::面の一覧が食い違っています。"
+            echo "::error::release.yml の matrix と scripts/install.sh の detect_target を"
+            echo "::error::**一緒に**直すこと（片方だけだと、断る面か 404 のどちらかが出ます）。"
+            exit 1; }
+          echo "✅ 面は一致"
+
+      # 重要: LICENSE と通知の無いアーカイブを出さない。静的リンクしている crate は
+      #    MIT / Apache-2.0 で、再配布には表示が要る。∴ ここで止める。
+      #    逃げ道（`ALLOW_NO_LICENSE` のような旗）は置かない。
+      - name: The archive's licence files exist
+        run: |
+          set -eu
+          missing=""
+          for f in LICENSE THIRD-PARTY-NOTICES.md; do [ -f "$f" ] || missing="$missing $f"; done
+          [ -z "$missing" ] || { echo "::error::配布物に入れる書類がありません:$missing"
+            echo "::error::⚠️ 静的リンクした crate（MIT / Apache-2.0）の表示義務が果たせません。"
+            exit 1; }
+          echo "✅ LICENSE / THIRD-PARTY-NOTICES.md が在る"
+
+  build:
+    name: Build ${{ matrix.face }}
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 注意: `face` の綴りが配布物の名前になる（`berthd-<face>.tar.gz`）。
+          #    上の guard が `scripts/install.sh` と突き合わせるので、勝手に変えない。
+          - face: linux-x86_64
+            target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - face: macos-arm64
+            target: aarch64-apple-darwin
+            os: macos-14
+          # 注意: Windows だけ 3 つ違う（下の Package）。
+          #    拡張子 `.exe` ／ 配布物は zip ／ `dist/` を入れない。
+          # 重要: さらに CRT を静的にリンクする。無いと `VCRUNTIME140.dll` を引き、
+          #    あれは Windows に標準では入っていない。
+          - face: windows-x86_64
+            target: x86_64-pc-windows-msvc
+            os: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup target add ${{ matrix.target }}
+
+      # 重要: Windows だけ CRT を静的にする。無いと `VCRUNTIME140.dll` を引き、
+      #    あれは Windows に標準では入っていない（VC++ 再配布可能パッケージの物）。
+      #    `+crt-static` で `VCRUNTIME140` も `api-ms-win-crt-*` も消える（大きさは 100 KB ほど増える）。
+      #    既定のまま配ると、相手の機械で起動しないことが在る。
+      - name: Build
+        shell: bash
+        env:
+          RF: ${{ matrix.face == 'windows-x86_64' && '-C target-feature=+crt-static' || '' }}
+        run: RUSTFLAGS="$RF" cargo build --release --locked --target ${{ matrix.target }} --bin berthd --bin berth
+
+      - name: Package
+        shell: bash
+        run: |
+          set -eu
+          VERSION="$(awk '/^\[package\]/{f=1;next} /^\[/{f=0} f && /^version *=/{gsub(/.*= *"|"/,""); print; exit}' Cargo.toml)"
+          DIR="berthd-${VERSION}-${{ matrix.face }}"
+          SRC="target/${{ matrix.target }}/release"
+
+          # 面で 3 つ違う。分岐を 1 か所に集める（散らすと「片方だけ直した」が起きる）。
+          case "${{ matrix.face }}" in
+            windows-*) EXE=.exe; EXT=zip;    HAS_DIST=0 ;;
+            *)         EXE="";   EXT=tar.gz; HAS_DIST=1 ;;
+          esac
+          mkdir -p "$DIR"
+
+          # 重要: 対でしか出さない。片方が欠けたアーカイブを黙って出荷しない。
+          #    素の `cp` は "No such file" としか言わず、`[ -f ] &&` で飛ばすともっと悪い。
+          for b in berthd berth; do
+            [ -x "$SRC/$b$EXE" ] || { echo "::error::$b$EXE が焼かれていません。"
+              echo "::error::[[bin]] の名前を変えたなら、この workflow と installer と docs を**一緒に**直すこと。"
+              echo "--- 実際に焼かれた物 ---"
+              find "$SRC" -maxdepth 1 -type f ! -name '*.d' -exec basename {} \; | sort
+              exit 1; }
+            cp "$SRC/$b$EXE" "$DIR/"
+          done
+
+          # 注意: `2>/dev/null || true` で握り潰さない（LICENSE 欠けを隠す形になる）。
+          for doc in README.md LICENSE THIRD-PARTY-NOTICES.md; do cp "$doc" "$DIR/"; done
+
+          # 重要: `dist/` は Windows に入れない。中身は systemd の unit と launchd の plist で、
+          #    あの面にはどちらも無い。使えない手順を配らない。
+          if [ "$HAS_DIST" = 1 ]; then
+            mkdir -p "$DIR/dist"
+            cp dist/berthd.service dist/com.berth.berthd.plist dist/README.md "$DIR/dist/"
+          fi
+
+          ASSET="berthd-${{ matrix.face }}.${EXT}"
+          # zip も tar.gz も bsdtar が造れる（`-a` が拡張子で形式を選ぶ）。
+          #    windows-latest の `tar` は bsdtar。注意: MSYS の GNU tar は zip を扱えない。
+          if [ "$EXT" = zip ]; then tar -a -cf "$ASSET" "$DIR"; else tar czf "$ASSET" "$DIR"; fi
+          # 中身を出力に残す（後から「何を配ったか」を release ページ以外でも辿れる）。
+          tar tf "$ASSET"
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: berthd-${{ matrix.face }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dl, merge-multiple: true }
+
+      - name: Checksums
+        run: |
+          set -eu
+          cd dl
+          ls -1
+          # 注意: `SHA256SUMS` はアーカイブと同じディレクトリで作る。パスが入ると
+          #    `sha256sum -c` が別の場所を探す。installer は `grep " <asset>$"` で引く。
+          # 重要: `*.tar.gz` と書かない。Windows は `.zip` なので、
+          #    その綴りだと zip だけが黙って漏れる。壊れ方も悪い:
+          #    出した人には見えず、Windows の利用者だけが installer の
+          #    「SHA256SUMS に行が無い」で止まる。
+          sha256sum berthd-* > SHA256SUMS
+          # 面の数だけ行が在ることを確かめる（0 件も 2 件もここで止める）。
+          FACES=$(grep -cE "^ +- face: " ../.github/workflows/release.yml || true)
+          [ "$(wc -l < SHA256SUMS)" = "$FACES" ] || { echo "::error::SHA256SUMS の行数が面の数と違います。"
+            echo "::error::期待 $FACES 行 / 実際 $(wc -l < SHA256SUMS) 行"; cat SHA256SUMS; exit 1; }
+          cat SHA256SUMS
+
+      # 第三者の action を使わない（`gh` は runner に最初から在る）。
+      #    配布物を作る工程に外部の依存を増やさない。
+      - name: Publish
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          set -eu
+          TAG="${GITHUB_REF#refs/tags/}"
+          # 注意: notes はファイルに書く。インラインの複数行文字列は YAML の
+          #    ブロックスカラーから外れやすい（parse に落ちる）。
+          cat > NOTES.md <<'EOF'
+          berthd TAG_PLACEHOLDER — `berthd`（デーモン）と `berth`（CLI）を**対で**配ります。
+
+          ## 入れ方
+
+          ```sh
+          curl -fsSL https://raw.githubusercontent.com/REPO_PLACEHOLDER/TAG_PLACEHOLDER/scripts/install.sh | sh
+          ```
+
+          その installer は、入れる前に走っているデーモンを畳み、旧 `argo` / `argod` を消し、
+          **対で置いてから両方に名乗らせます**（版が同じでも build hash が違えば対ではありません）。
+
+          ## 手で入れる
+
+          ```sh
+          curl -fsSL https://github.com/REPO_PLACEHOLDER/releases/download/TAG_PLACEHOLDER/berthd-linux-x86_64.tar.gz | tar xz
+          cd berthd-*/ && install -m755 berthd berth ~/.local/bin/
+          ```
+
+          ⚠️ **展開先はディレクトリです**（カレントに `berthd` は出来ません）。
+          ⚠️ **片方だけ入れないでください** —— プロトコルが食い違ったまま動きます。
+
+          検算は `SHA256SUMS`。常駐させる手順は同梱の `dist/README.md`。
+          EOF
+          sed -i "s|TAG_PLACEHOLDER|$TAG|g; s|REPO_PLACEHOLDER|${{ github.repository }}|g" NOTES.md
+          gh release create "$TAG" dl/*.tar.gz dl/SHA256SUMS \
+            --repo "${{ github.repository }}" --title "$TAG" --notes-file NOTES.md

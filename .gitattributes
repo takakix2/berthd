@@ -1,0 +1,23 @@
+# ═════════════════════════════════════════════════════════════════
+# 改行は LF が正。
+#
+# なぜ要るか: 作業ツリーが CRLF に化けると、数行の変更が全行の差分に見える。壊れ方は 2 つ:
+#   ① そのまま commit すると `git blame` が全行その commit を指す
+#   ② 次に unix の側が触ると逆向きに全部戻る差分が出て、往復し続ける
+# 重要: ∴「見づらい」ではなく、履歴が読めなくなる話。
+#
+# 規則は基底の 1 行と、下の binary の名指しだけ。`.bat` / `.cmd` は無いので例外を置いていない
+# （先回りで書くと「測った結果」と「念のため」が同じ顔で並ぶ。増えた日に足す）。
+#
+# `.ps1`（`scripts/install.ps1`）にも例外は置かない。LF のままで Windows PowerShell 5.1 でも走る。
+# このファイルは ASCII のみ・BOM 無しで、それを守るのは `scripts/check-install-ps1.sh`。
+# ═════════════════════════════════════════════════════════════════
+
+# `eol=lf` は checkout でも LF（`core.autocrlf` を上書きする）。Windows でも
+# 作業ツリーが LF になるので、往復そのものが起きない。
+* text=auto eol=lf
+
+# `crates/berth-screen/fixtures/*.bin` は端末の録画（`\r\n` と ESC を含む生バイト）。
+# 注意: NUL が無いので `text=auto` はテキストと見て `\r` を剥ぐ（進捗バーの `\r` が消えて
+# fixture が別物になる）。∴ 名指しで binary にする。
+crates/berth-screen/fixtures/*.bin binary

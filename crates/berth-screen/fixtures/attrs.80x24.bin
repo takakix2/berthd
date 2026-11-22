@@ -1,0 +1,7 @@
+$ attrs
+[38;2;255;128;0mrgb fg[0m [48;5;22mbg 256[0m [44mbg 16[0m
+[3mitalic[0m [4munder[0m [7minverse[0m [2mdim[0m [9mstrike[0m
+[41mred bg then spaces   [0m
+[1;4;38;5;208mstacked[22m minus bold[24m minus under[39m back to default[0m
+[32mwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww[0m
+$ 

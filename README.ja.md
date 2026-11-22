@@ -253,6 +253,48 @@ UNIX ドメインソケットはパーミッション `0600`、ディレクト�
 
 Windows の名前付きパイプ（`\\.\pipe\berthd-<user>`）には所有者アカウントのみを許可する DACL が設定され、`berth` は接続先プロセスの SID が自身のアカウントと一致するかをハンドシェイク前に検証します（別ユーザーによるパイプの横取りを防止します）。同一アカウント権限で動作する悪意ある別プロセスからの保護は対象外です。
 
+## プロジェクト構成
+
+```text
+berthd/
+├── src/
+│   ├── lib.rs                    # 共有ライブラリルート
+│   ├── config.rs                 # ~/.berth/config.toml の読み込みと ~ 展開
+│   ├── journal.rs                # NDJSON 監査ジャーナル出力
+│   ├── listener.rs               # UNIX ドメインソケット / Windows 名前付きパイプ待受
+│   ├── peer.rs                   # 接続元プロセスの資格情報・祖先プロセスツリー取得
+│   ├── replay_head.rs            # スクロールバック欠落時の端末状態サマリ生成
+│   ├── shell.rs                  # クロスプラットフォームのシェル解決
+│   ├── win_pipe_acl.rs           # 所有者専用 DACL およびサーバー SID 検証 (Windows)
+│   ├── winproc.rs                # コンソールなしでのデーモン起動補助 (Windows)
+│   └── bin/
+│       ├── berth/                # CLI クライアント (`berth`)
+│       │   ├── main.rs           # エントリポイント・サブコマンド振り分け
+│       │   ├── wire.rs           # デーモン接続・ハンドシェイク・制御リクエスト
+│       │   ├── daemon_start.rs   # berthd の自動起動（Linux では systemd scope 対応）
+│       │   ├── commands.rs       # 各種サブコマンド (ls, info, rename, detach, kill, kill-server)
+│       │   ├── attach.rs         # 対話アタッチのメインループ
+│       │   └── attach/           # 引数解析・raw mode・alt-screen・ペインキャッシュ・再生処理
+│       └── berthd/               # ヘッドレス PTY デーモン (`berthd`)
+│           ├── main.rs           # エントリポイント・接続受付ループ・終了処理
+│           ├── session.rs        # セッション管理テーブル・命名・現在状態取得
+│           ├── spawn.rs          # PTY 確保とシェルプロセス起動
+│           ├── pty_loop.rs       # PTY 入出力多重化と終了通知
+│           ├── output.rs         # 出力リングバッファ・複数クライアント配信・遅延クライアント切断
+│           ├── conn.rs           # クライアント接続ごとの状態管理と制御ディスパッチ
+│           ├── attach.rs         # アタッチ時のハンドシェイクと履歴/画面再生
+│           ├── sanitize.rs       # 再生データ内の端末問い合わせシーケンスの無害化
+│           ├── session_scope.rs  # セッション単位の systemd ユーザースコープ分離 (Linux)
+│           └── launch_job.rs     # Job Object によるプロセスツリー一括終了 (Windows)
+├── crates/
+│   ├── berth-protocol/           # ワイヤプロトコル（フレーム符号化・制御メッセージ・エンドポイント）
+│   └── berth-screen/             # `--no-scrollback` 再生用のオフスクリーン VT レンダラ
+├── tests/                        # 統合テスト群
+├── dist/                         # サービス定義テンプレート (systemd / launchd)
+├── scripts/                      # インストーラ (`install.sh`, `install.ps1`)
+└── assets/                       # ロゴ・アイコン類
+```
+
 ## ライセンス
 
 ISC ライセンス（[LICENSE](LICENSE)）。サードパーティ製ライブラリのライセンス表記は [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) を参照してください。

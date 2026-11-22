@@ -1,0 +1,3 @@
+/target
+# xterm.js の物差し（開発のときだけ使う）。版は package.json / bun.lock で固定し、実体は入れない。
+crates/berth-screen/oracle/node_modules

@@ -1,0 +1,14 @@
+[package]
+name = "berth-screen"
+version = "0.1.0"
+edition = "2021"
+license = "ISC"
+description = "berth attach --scrollback: run the session's replay through a terminal emulator once, on the client, and emit clean lines for the terminal's own scrollback"
+publish = false
+
+[dependencies]
+# 版は固定（`=`）。Alacritty は版ごとに API が動く。上げるときは `scripts/screen-oracle.sh`
+#    （xterm.js の物差し）を通してから。serde は要らない（格子を直列化しない）。
+# 注意: `tty` モジュールは無条件に入る（unix: rustix-openpty / signal-hook、windows: miow / piper /
+#    windows-sys 0.59）。`berth` の依存木は増えるが、使うのは入り直す瞬間の 1 回だけで常駐には響かない。
+alacritty_terminal = { version = "=0.26.0", default-features = false }

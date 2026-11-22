@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────────
+# 検体が本物の台帳（journal）を汚さないようにする。
+#
+# これが無いと、`cargo test` のたびに開発者の台帳へ検体のセッションの行が足される。
+# セッション名を見れば検体だと分かるが、見なければ分からないし、attach の回数を数える集計は黙って狂う。
+# 台帳は計測器でもあるので、汚れているとその上で下した判断が全部あやしくなる。
+#
+# 注意: 台帳を一律に切る旗にはしない。「記録されること」を検査する検体が書けなくなる。
+# 切るのではなく書き先を移す。
+#
+# 注意: 効く範囲は「cargo が起動するプロセス」だけ（`cargo test` / `cargo run` には効くが、
+# `target/debug/berthd` を直接叩く実行には効かない）。
+# 注意: 既に環境に `BERTHD_JOURNAL_PATH` があればそちらが勝つ（`[env]` は既定で上書きしない）。
+#
+# 釘付けは `tests_never_write_to_the_developers_real_journal`（設定ではなく、
+# 設定が効いていることを検査する）。
+[env]
+BERTHD_JOURNAL_PATH = { value = "target/test-journal.jsonl", relative = true }
+
+# ─────────────────────────────────────────────────────────────────
+# 検体が開発者の systemd に scope を作らないようにする。
+#
+# berthd はセッションのシェルを `berthd-session-<pid>-<seq>.scope` へ移す（Linux）。
+# 検体は本物のセッションを何十本も起こすので、そのままだと開発者の user manager に
+# scope が残り続ける（`CollectMode` で消えはするが、走っている間は `systemctl --user` に並ぶ）。
+# 台帳と同じで「切る」のではなく、確かめる検体 1 本だけが外して撃つ
+# （`tests/a_session_gets_its_own_scope.rs`）。
+BERTHD_NO_SESSION_SCOPE = "1"

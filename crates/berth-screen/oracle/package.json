@@ -1,0 +1,9 @@
+{
+  "name": "berth-screen-oracle",
+  "private": true,
+  "description": "xterm.js headless as the yardstick for crates/berth-screen (berthd #54). Dev machines only.",
+  "type": "module",
+  "dependencies": {
+    "@xterm/headless": "5.5.0"
+  }
+}
