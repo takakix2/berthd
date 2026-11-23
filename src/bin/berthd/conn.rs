@@ -270,6 +270,7 @@ impl Conn {
                     info.cols = cols;
                     info.rows = rows;
                 }
+                info.program_status = s.output.lock().ok().and_then(|o| o.program_status());
                 info
             })
             .collect();
@@ -472,7 +473,7 @@ impl Conn {
     }
 
     async fn on_peek(&self, serial: u32, session_id: String, max_bytes: Option<usize>) {
-        let (bytes, replay_head, cols, rows, idle_ms, produced, attached) = {
+        let (bytes, replay_head, cols, rows, idle_ms, produced, attached, program_status) = {
             let tbl = self.table.lock().await;
             let Some(sess) = tbl.get(&session_id) else {
                 drop(tbl);
@@ -487,12 +488,21 @@ impl Conn {
                 return;
             };
             let (cols, rows) = live_size(&sess.master).unwrap_or((sess.info.cols, sess.info.rows));
-            let (bytes, replay_head, idle_ms, produced, attached) = sess
+            let ((bytes, replay_head, idle_ms, produced, attached), program_status) = sess
                 .output
                 .lock()
-                .map(|o| o.peek_tail(max_bytes))
-                .unwrap_or_else(|_| (Vec::new(), None, 0, 0, false));
-            (bytes, replay_head, cols, rows, idle_ms, produced, attached)
+                .map(|o| (o.peek_tail(max_bytes), o.program_status()))
+                .unwrap_or_else(|_| ((Vec::new(), None, 0, 0, false), None));
+            (
+                bytes,
+                replay_head,
+                cols,
+                rows,
+                idle_ms,
+                produced,
+                attached,
+                program_status,
+            )
         };
         let data_len = bytes.len();
         self.reply(
@@ -506,6 +516,7 @@ impl Conn {
                 idle_ms,
                 produced,
                 attached,
+                program_status,
             },
         )
         .await;

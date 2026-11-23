@@ -60,6 +60,7 @@ macro_rules! log_line {
 
 mod attach;
 mod conn;
+mod osc7501;
 mod output;
 mod pty_loop;
 mod sanitize;

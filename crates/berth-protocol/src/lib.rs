@@ -73,7 +73,11 @@ pub const KIND_DATA: u8 = 1;
 ///   セッションの画面状態と無出力時間（`idle_ms`）を覗く口。
 ///   版ゲートが要る。古い berthd は未知の制御メッセージを黙って捨てるため、client は応答を待って
 ///   ハングする。∴ client は `Welcome.protocol >= 14` を確認してから送ること。
-pub const PROTOCOL_VERSION: u32 = 14;
+/// - 15: `PeekResult.program_status` と `SessionInfo.program_status`: 中のプログラムが OSC 7501 で
+///   名乗った最後の状態（`idle` / `working` / `blocked` …）。berthd は `ESC ] 7501 ; ?` の問い合わせに
+///   自分で答える（端末へは渡さない）ので、どの端末の下でも・detach 中でも名乗りが届く。
+///   版ゲートは要らない。古い berthd は欄を送らず `None`（「名乗っていない」と同じ）に落ちる。
+pub const PROTOCOL_VERSION: u32 = 15;
 
 /// Rheon Protocol v1 のエンベロープの既定値。
 pub const RHEON_V: u32 = 1;
@@ -364,6 +368,9 @@ pub enum Control {
         idle_ms: u64,
         produced: u64,
         attached: bool,
+        /// 中のプログラムが OSC 7501 で名乗った最後の状態（protocol 15）。名乗っていなければ `None`。
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        program_status: Option<ProgramStatus>,
     },
     Error {
         code: String,
@@ -422,6 +429,32 @@ pub struct SessionInfo {
     pub alive: bool,
     pub cols: u16,
     pub rows: u16,
+    /// 中のプログラムが OSC 7501 で名乗った最後の状態（protocol 15）。名乗っていなければ `None`。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_status: Option<ProgramStatus>,
+}
+
+/// 中のプログラム（コーディングエージェント等）が OSC 7501 で名乗った状態（protocol 15）。
+///
+/// 元の形は `ESC ] 7501 ; state=<s>:kind=<k>:app=<a>:msg=<base64> ST`。berthd は最後の 1 件だけを持ち、
+/// `state=clear` で忘れる。値は名乗りをそのまま運ぶ（berthd は意味を解釈しない）。
+/// 注意: これは自己申告。名乗らないプログラムの状態は分からない（`None` は「不明」であって「暇」ではない）。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProgramStatus {
+    /// `idle` / `working` / `done` / `blocked` / `error`（名乗った綴りのまま）。
+    pub state: String,
+    /// `blocked` の中身（`permission` / `question` / `auth`）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// 名乗ったプログラム（`claude-code` 等）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<String>,
+    /// 添え書き（base64 を解いた文字列）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub msg: Option<String>,
+    /// 名乗ってからの経過ミリ秒（応答を作った時点）。
+    #[serde(default)]
+    pub age_ms: u64,
 }
 
 /// `Control` を Rheon Protocol v1 のエンベロープ付き JSON バイト列にする。
@@ -1074,6 +1107,13 @@ mod tests {
             idle_ms: 1200,
             produced: 4096,
             attached: true,
+            program_status: Some(ProgramStatus {
+                state: "blocked".into(),
+                kind: Some("permission".into()),
+                app: Some("claude-code".into()),
+                msg: None,
+                age_ms: 30_000,
+            }),
         };
         let decoded = decode_control(&encode_control("berthd", &peek)).unwrap();
         match decoded {
@@ -1085,6 +1125,7 @@ mod tests {
                 idle_ms,
                 produced,
                 attached,
+                program_status,
                 ..
             } => {
                 assert_eq!(session_id, "s1");
@@ -1093,7 +1134,21 @@ mod tests {
                 assert_eq!(idle_ms, 1200);
                 assert_eq!(produced, 4096);
                 assert!(attached);
+                let st = program_status.expect("program_status round-trips");
+                assert_eq!(st.state, "blocked");
+                assert_eq!(st.kind.as_deref(), Some("permission"));
+                assert_eq!(st.age_ms, 30_000);
             }
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    /// protocol 14 の berthd は `program_status` を送らない。15 の client は `None` として読む。
+    #[test]
+    fn a_peek_from_an_older_berthd_has_no_program_status() {
+        let old = br#"{"event":"peek_result","session_id":"s1","data_len":0,"cols":80,"rows":24,"idle_ms":0,"produced":0,"attached":false}"#;
+        match decode_control(old).unwrap() {
+            Control::PeekResult { program_status, .. } => assert_eq!(program_status, None),
             other => panic!("unexpected: {other:?}"),
         }
     }

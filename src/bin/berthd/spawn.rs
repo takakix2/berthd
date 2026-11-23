@@ -290,8 +290,8 @@ pub(crate) async fn spawn_session(
 
     let (input_tx, input_rx) = mpsc::channel::<PtyInput>(64);
     let (write_tx, write_rx) = mpsc::channel::<Vec<u8>>(64);
-    // io ループも PTY へ書く口を 1 つ持つ（起動直後の `ESC[6n` に自分で答えるため・Windows だけ）。
-    #[cfg(windows)]
+    // io ループも PTY へ書く口を 1 つ持つ（OSC 7501 の問い合わせに答えるため・Windows では
+    // 起動直後の `ESC[6n` にも）。
     let write_tx_for_io = write_tx.clone();
     let write_tx_for_table = write_tx;
     let (output_tx, output_rx) = mpsc::channel::<Vec<u8>>(256);
@@ -318,6 +318,8 @@ pub(crate) async fn spawn_session(
         alive: true,
         cols,
         rows,
+        // 今の値は `List` のたびに `SessionOutput` から引く（ここは控え）。
+        program_status: None,
     };
     let spawned = Spawned {
         id: id.clone(),
@@ -358,7 +360,15 @@ pub(crate) async fn spawn_session(
     ));
     #[cfg(not(windows))]
     tokio::spawn(run_pty_io_loop(
-        master, writer, child, input_rx, output_rx, output, table_c, id_c,
+        master,
+        writer,
+        child,
+        input_rx,
+        output_rx,
+        output,
+        table_c,
+        id_c,
+        write_tx_for_io,
     ));
 
     Ok(spawned)

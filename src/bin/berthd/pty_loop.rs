@@ -55,9 +55,12 @@ pub(crate) async fn run_pty_io_loop(
     session_id: String,
     // この起動 1 本分の job（`isize` なのは `Send` のため）。
     #[cfg(windows)] job: Option<isize>,
-    // 起動直後の `ESC[6n` に答えるための、PTY への書き口（writer スレッドへの送り口）。
-    #[cfg(windows)] write_tx: mpsc::Sender<Vec<u8>>,
+    // PTY への書き口（writer スレッドへの送り口）。OSC 7501 の問い合わせと、Windows の
+    // 起動直後の `ESC[6n` に答えるため。
+    write_tx: mpsc::Sender<Vec<u8>>,
 ) {
+    // OSC 7501 の問い合わせを抜いて答え、名乗りを拾う（`osc7501.rs`・berthd が答える唯一の問い合わせ）。
+    let mut osc7501 = crate::osc7501::Osc7501::default();
     // 子の死を覗きに行く間隔。短くすると起床が増え、長くすると「終わったのに一覧に残る」窓が
     // 伸びる。unix は EOF ですぐ気づくので、これは Windows での遅れの天井。
     const REAP_POLL: std::time::Duration = std::time::Duration::from_millis(500);
@@ -147,8 +150,24 @@ pub(crate) async fn run_pty_io_loop(
                                 }
                             }
                         }
+                        // OSC 7501 の問い合わせは録画にも端末にも流さず、berthd が答える。
+                        // 注意: 書き口は待たない（`try_send`）。子が入力を読まずに塞がっていると、待てば出力まで止まる。
+                        let filtered = osc7501.filter(&batch);
+                        for _ in 0..filtered.probes {
+                            if write_tx.try_send(crate::osc7501::REPLY.to_vec()).is_err() {
+                                log_line!("[berthd] session {session_id}: could not answer the OSC 7501 probe");
+                            }
+                        }
+                        let batch = filtered.out;
+                        // 名乗りは流すバイトの中から拾うので、空なら名乗りも無い。
+                        if batch.is_empty() {
+                            continue 'io;
+                        }
                         // replay_buf への追記はロックの中、送るのはロックの外。
                         let staged = output.lock().ok().map(|mut o| {
+                            for r in filtered.reports {
+                                o.record_program_status(r);
+                            }
                             let op = o.stage(&batch);
                             let viewers: Vec<_> = o.viewers.iter().map(|v| v.tx.clone()).collect();
                             (op, viewers)

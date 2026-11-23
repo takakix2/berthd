@@ -73,6 +73,8 @@ pub(crate) struct SessionOutput {
     pub(crate) last_send_produced: Option<u64>,
     /// `produced` が進まないまま連続で `SendKeys` された回数。
     pub(crate) consecutive_sends: u32,
+    /// 中のプログラムが OSC 7501 で名乗った最後の状態と、名乗った時刻（`osc7501.rs`）。
+    program_status: Option<(berth_protocol::ProgramStatus, std::time::Instant)>,
 }
 
 /// 出力が進まないまま連続で `SendKeys` できる上限回数（無限ループ防止）。
@@ -94,7 +96,30 @@ impl SessionOutput {
             last_output: None,
             last_send_produced: None,
             consecutive_sends: 0,
+            program_status: None,
         }
+    }
+
+    /// 名乗りを覚える（`None` は `state=clear` ＝ 忘れる）。古い順に渡すこと（最後の 1 件が残る）。
+    ///
+    /// 注意: 同じ名乗りの繰り返しでは時刻を進めない。`age_ms` は「その状態になってから」で、
+    /// 描き直しのたびに同じ状態を名乗るプログラムが居ても、確認待ちの放置の長さが 0 に戻らないように。
+    pub(crate) fn record_program_status(&mut self, report: Option<berth_protocol::ProgramStatus>) {
+        self.program_status = match (report, self.program_status.take()) {
+            (Some(new), Some((old, at))) if new == old => Some((old, at)),
+            (Some(new), _) => Some((new, std::time::Instant::now())),
+            (None, _) => None,
+        };
+    }
+
+    /// 最後の名乗り（`age_ms` は今の時点で数える）。
+    pub(crate) fn program_status(&self) -> Option<berth_protocol::ProgramStatus> {
+        self.program_status
+            .as_ref()
+            .map(|(s, at)| berth_protocol::ProgramStatus {
+                age_ms: u64::try_from(at.elapsed().as_millis()).unwrap_or(u64::MAX),
+                ..s.clone()
+            })
     }
     /// replay_buf へ追記し、送るべき物を返す（注意: このロックの中では送らない）。
     ///
@@ -606,5 +631,36 @@ mod drop_report_tests {
             assert!(pending.is_none(), "落ちていないのに報告が組まれた");
         }
         assert_eq!(o.dropped_events, 0);
+    }
+}
+
+#[cfg(test)]
+mod program_status_tests {
+    //! 名乗りは最後の 1 件。同じ名乗りの繰り返しでは「その状態になってから」の時計を戻さない。
+    use super::*;
+    use berth_protocol::ProgramStatus;
+
+    fn st(state: &str) -> ProgramStatus {
+        ProgramStatus {
+            state: state.into(),
+            ..ProgramStatus::default()
+        }
+    }
+
+    #[test]
+    fn the_same_report_again_keeps_the_age_and_a_new_one_resets_it() {
+        let mut o = SessionOutput::new();
+        assert_eq!(o.program_status(), None);
+        o.record_program_status(Some(st("blocked")));
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        o.record_program_status(Some(st("blocked")));
+        let age = o.program_status().unwrap().age_ms;
+        assert!(age >= 30, "the repeat reset the clock: {age}");
+        o.record_program_status(Some(st("working")));
+        let now = o.program_status().unwrap();
+        assert_eq!(now.state, "working");
+        assert!(now.age_ms < 30, "a new state starts its own clock");
+        o.record_program_status(None);
+        assert_eq!(o.program_status(), None, "clear forgets");
     }
 }

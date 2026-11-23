@@ -220,3 +220,113 @@ async fn send_loop_limit_rejects_repeated_unanswered_sends() {
         Control::SendKeysAck { .. }
     ));
 }
+
+/// berthd は `ESC ] 7501 ; ?` に自分で答え（端末が居なくても）、問い合わせは録画に残さず、
+/// 返事を受けたプログラムが名乗った状態を `Peek` / `List` で返す（protocol 15）。
+#[cfg(unix)]
+#[tokio::test]
+async fn berthd_answers_the_osc_7501_probe_and_remembers_the_status() {
+    let f = common::Fixture::start("osc7501");
+    let mut c = wait_for_daemon(&f.endpoint, Duration::from_secs(5)).await;
+
+    send_ctrl(
+        &mut c,
+        1,
+        &Control::Spawn {
+            session_id: Some("agent".into()),
+            name: None,
+            shell: Some("sh".into()),
+            shell_src: None,
+            cwd: None,
+            env: None,
+            label: None,
+            cols: 80,
+            rows: 24,
+        },
+    )
+    .await;
+    assert!(matches!(read_ctrl(&mut c).await, Control::Spawned { .. }));
+
+    // エージェントの代役: 問い合わせを出し、返事（10 バイト）が届いたときだけ名乗る。
+    // 誰も attach していないので、答えられるのは berthd だけ。
+    let script = concat!(
+        "stty raw -echo; printf '\\033]7501;?\\007'; dd bs=1 count=10 >/dev/null 2>&1; stty sane; ",
+        "printf '\\033]7501;state=blocked:kind=permission:app=stand-in\\007'; echo DONE_7501\r"
+    );
+    send_ctrl(
+        &mut c,
+        2,
+        &Control::SendKeys {
+            session_id: "agent".into(),
+            data: script.as_bytes().to_vec(),
+            force: false,
+        },
+    )
+    .await;
+    assert!(matches!(
+        read_ctrl(&mut c).await,
+        Control::SendKeysAck { .. }
+    ));
+
+    let mut seq = 3;
+    let mut seen = None;
+    for _ in 0..50 {
+        send_ctrl(
+            &mut c,
+            seq,
+            &Control::Peek {
+                session_id: "agent".into(),
+                max_bytes: None,
+            },
+        )
+        .await;
+        seq += 1;
+        let (data_len, status) = match read_ctrl(&mut c).await {
+            Control::PeekResult {
+                data_len,
+                program_status,
+                ..
+            } => (data_len, program_status),
+            other => panic!("expected PeekResult, got {other:?}"),
+        };
+        let bytes = if data_len > 0 {
+            loop {
+                let frame = read_frame(&mut c).await.unwrap();
+                if frame.kind == KIND_DATA {
+                    break frame.payload;
+                }
+            }
+        } else {
+            Vec::new()
+        };
+        if let Some(st) = status {
+            seen = Some((st, bytes));
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let (st, bytes) = seen.expect("the stand-in never got a reply (no program_status)");
+    assert_eq!(st.state, "blocked");
+    assert_eq!(st.kind.as_deref(), Some("permission"));
+    assert_eq!(st.app.as_deref(), Some("stand-in"));
+    // 問い合わせは録画に残らない（名乗りは残る・端末へも流れる）。
+    let has = |needle: &[u8]| bytes.windows(needle.len()).any(|w| w == needle);
+    assert!(!has(b"\x1b]7501;?\x07"), "the probe leaked into the replay");
+    assert!(
+        has(b"\x1b]7501;state=blocked"),
+        "the report should pass through"
+    );
+
+    // `List` も同じ状態を返す。
+    send_ctrl(&mut c, seq, &Control::List).await;
+    match read_ctrl(&mut c).await {
+        Control::Sessions { sessions } => {
+            let s = sessions.iter().find(|s| s.id == "agent").unwrap();
+            assert_eq!(
+                s.program_status.as_ref().map(|p| p.state.as_str()),
+                Some("blocked")
+            );
+        }
+        other => panic!("expected Sessions, got {other:?}"),
+    }
+}

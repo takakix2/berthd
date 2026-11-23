@@ -196,13 +196,14 @@ pub(crate) async fn cmd_ls() -> Result<(), String> {
         };
         let state = if s.alive { "" } else { "  [exited]" };
         say!(
-            "{mark} {:<name_w$}  {:<shell_w$}  {}x{}  {}{}{}",
+            "{mark} {:<name_w$}  {:<shell_w$}  {}x{}  {}{}{}{}",
             s.name,
             s.shell,
             s.cols,
             s.rows,
             s.cwd,
             cwd_mark(&s.cwd_src),
+            status_mark(s.program_status.as_ref()),
             state,
             name_w = name_w,
             shell_w = shell_w,
@@ -226,6 +227,27 @@ fn cwd_mark(cwd_src: &str) -> &'static str {
         " (spawn)"
     } else {
         ""
+    }
+}
+
+/// 中のプログラムが OSC 7501 で名乗った状態の印（`  [blocked:permission 3m]`）。名乗っていなければ空。
+///
+/// 経過時間は「その状態になってから」。`blocked` が長いのは確認待ちの放置（Ctrl+C で止めないこと）。
+fn status_mark(st: Option<&berth_protocol::ProgramStatus>) -> String {
+    let Some(st) = st else {
+        return String::new();
+    };
+    let secs = st.age_ms / 1000;
+    let age = if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m", secs / 60)
+    } else {
+        format!("{}h", secs / 3600)
+    };
+    match &st.kind {
+        Some(kind) => format!("  [{}:{kind} {age}]", st.state),
+        None => format!("  [{} {age}]", st.state),
     }
 }
 
@@ -613,20 +635,29 @@ pub(crate) async fn cmd_peek(args: &[String]) -> Result<(), String> {
     .await
     .map_err(|e| format!("berth: send failed: {e}"))?;
 
-    let (data_len, replay_head, cols, rows, idle_ms, attached) = match next_control(&mut rd).await?
-    {
-        Control::PeekResult {
-            data_len,
-            replay_head,
-            cols,
-            rows,
-            idle_ms,
-            attached,
-            ..
-        } => (data_len, replay_head, cols, rows, idle_ms, attached),
-        Control::Error { message, .. } => return Err(format!("berth: {message}")),
-        other => return Err(format!("berth: unexpected reply to peek: {other:?}")),
-    };
+    let (data_len, replay_head, cols, rows, idle_ms, attached, program_status) =
+        match next_control(&mut rd).await? {
+            Control::PeekResult {
+                data_len,
+                replay_head,
+                cols,
+                rows,
+                idle_ms,
+                attached,
+                program_status,
+                ..
+            } => (
+                data_len,
+                replay_head,
+                cols,
+                rows,
+                idle_ms,
+                attached,
+                program_status,
+            ),
+            Control::Error { message, .. } => return Err(format!("berth: {message}")),
+            other => return Err(format!("berth: unexpected reply to peek: {other:?}")),
+        };
 
     let bytes = if data_len > 0 {
         loop {
@@ -658,6 +689,8 @@ pub(crate) async fn cmd_peek(args: &[String]) -> Result<(), String> {
             "idle_ms": idle_ms,
             "attached": attached,
             "in_alt_screen": screen.in_alt_screen,
+            // 中のプログラムが OSC 7501 で名乗った最後の状態（名乗っていなければ null）。
+            "program_status": program_status,
             "lines": tail,
         });
         say!("{doc}");
@@ -699,6 +732,28 @@ mod tests {
         assert!(p(&argv(&["w1", "--ctrl-c", "x"]), None).is_err());
         assert!(p(&argv(&["w1", "--no-enter"]), None).is_err());
         assert!(p(&argv(&[]), None).is_err());
+    }
+
+    #[test]
+    fn status_mark_shows_the_state_kind_and_age() {
+        use super::status_mark;
+        use berth_protocol::ProgramStatus;
+        assert_eq!(status_mark(None), "");
+        let st = |state: &str, kind: Option<&str>, age_ms| ProgramStatus {
+            state: state.into(),
+            kind: kind.map(Into::into),
+            age_ms,
+            ..ProgramStatus::default()
+        };
+        assert_eq!(status_mark(Some(&st("idle", None, 4_000))), "  [idle 4s]");
+        assert_eq!(
+            status_mark(Some(&st("blocked", Some("permission"), 185_000))),
+            "  [blocked:permission 3m]"
+        );
+        assert_eq!(
+            status_mark(Some(&st("working", None, 7_300_000))),
+            "  [working 2h]"
+        );
     }
 
     /// `echo cmd | berth send --stdin` の末尾の改行は Enter と重ねない（2 回実行になる）。
