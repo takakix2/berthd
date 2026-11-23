@@ -77,7 +77,10 @@ pub const KIND_DATA: u8 = 1;
 ///   名乗った最後の状態（`idle` / `working` / `blocked` …）。berthd は `ESC ] 7501 ; ?` の問い合わせに
 ///   自分で答える（端末へは渡さない）ので、どの端末の下でも・detach 中でも名乗りが届く。
 ///   版ゲートは要らない。古い berthd は欄を送らず `None`（「名乗っていない」と同じ）に落ちる。
-pub const PROTOCOL_VERSION: u32 = 15;
+/// - 16: `SessionInfo.pid`: セッションのシェル（PTY の子）の PID。外の観測者（watchtower の skopos）が
+///   エージェントのプロセスから親をたどり、どのセッションの中で動いているかを突き合わせるため。
+///   版ゲートは要らない。古い berthd は欄を送らず `None`（「分からない」）に落ちる。
+pub const PROTOCOL_VERSION: u32 = 16;
 
 /// Rheon Protocol v1 のエンベロープの既定値。
 pub const RHEON_V: u32 = 1;
@@ -432,6 +435,10 @@ pub struct SessionInfo {
     /// 中のプログラムが OSC 7501 で名乗った最後の状態（protocol 15）。名乗っていなければ `None`。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub program_status: Option<ProgramStatus>,
+    /// セッションのシェル（PTY の子）の PID（protocol 16）。子が無い・古い berthd なら `None`。
+    /// 注意: シェルが終わった後は使い回されうる。`alive` と一緒に読むこと。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
 }
 
 /// 中のプログラム（コーディングエージェント等）が OSC 7501 で名乗った状態（protocol 15）。
@@ -1149,6 +1156,25 @@ mod tests {
         let old = br#"{"event":"peek_result","session_id":"s1","data_len":0,"cols":80,"rows":24,"idle_ms":0,"produced":0,"attached":false}"#;
         match decode_control(old).unwrap() {
             Control::PeekResult { program_status, .. } => assert_eq!(program_status, None),
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    /// protocol 16: `SessionInfo.pid` は往復し、古い berthd（欄なし）からは `None` に落ちる。
+    #[test]
+    fn a_session_carries_its_shells_pid_and_an_older_berthd_has_none() {
+        let old = br#"{"event":"sessions","sessions":[{"id":"s1","name":"a","shell":"sh","cwd":"/","alive":true,"cols":80,"rows":24}]}"#;
+        match decode_control(old).unwrap() {
+            Control::Sessions { sessions } => assert_eq!(sessions[0].pid, None),
+            other => panic!("unexpected: {other:?}"),
+        }
+        let new = br#"{"event":"sessions","sessions":[{"id":"s1","name":"a","shell":"sh","cwd":"/","alive":true,"cols":80,"rows":24,"pid":4242}]}"#;
+        match decode_control(new).unwrap() {
+            Control::Sessions { sessions } => {
+                assert_eq!(sessions[0].pid, Some(4242));
+                let again = serde_json::to_string(&sessions[0]).unwrap();
+                assert!(again.contains(r#""pid":4242"#), "{again}");
+            }
             other => panic!("unexpected: {other:?}"),
         }
     }

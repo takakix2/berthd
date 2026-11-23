@@ -360,6 +360,90 @@ fn berth_ls_json(endpoint: &std::ffi::OsStr) -> serde_json::Value {
     serde_json::from_slice(&o.stdout).expect("berth ls --json prints one JSON document")
 }
 
+/// `berth ls --json` の `pid` は、そのセッションのシェル自身の PID（シェルが `$$` で名乗る値）。
+/// watchtower の skopos は、エージェントのプロセスから親をたどってこの PID に当たったら
+/// 「このセッションの中で動いている」と読む ∴ 別の PID（berthd・pty の親など）だと突き合わせが外れる。
+#[cfg(unix)]
+#[tokio::test]
+async fn ls_json_names_the_shells_own_pid() {
+    let f = common::Fixture::start("lspid");
+    let mut c = wait_for_daemon(&f.endpoint, Duration::from_secs(5)).await;
+    send_ctrl(
+        &mut c,
+        1,
+        &Control::Spawn {
+            session_id: Some("p1".into()),
+            name: None,
+            shell: Some("sh".into()),
+            shell_src: None,
+            cwd: None,
+            env: None,
+            label: None,
+            cols: 80,
+            rows: 24,
+        },
+    )
+    .await;
+    assert!(matches!(read_ctrl(&mut c).await, Control::Spawned { .. }));
+    send_ctrl(
+        &mut c,
+        2,
+        &Control::SendKeys {
+            session_id: "p1".into(),
+            data: b"echo SHELL_PID_$$_END\r".to_vec(),
+            force: false,
+        },
+    )
+    .await;
+    assert!(matches!(
+        read_ctrl(&mut c).await,
+        Control::SendKeysAck { .. }
+    ));
+
+    let doc = berth_ls_json(&f.endpoint);
+    let pid = doc["sessions"][0]["pid"]
+        .as_u64()
+        .expect("ls --json names the shell's pid");
+
+    // シェル自身が名乗った `$$` と同じか。
+    let mut said = None;
+    for seq in (3..).take(50) {
+        send_ctrl(
+            &mut c,
+            seq,
+            &Control::Peek {
+                session_id: "p1".into(),
+                max_bytes: None,
+            },
+        )
+        .await;
+        let data_len = match read_ctrl(&mut c).await {
+            Control::PeekResult { data_len, .. } => data_len,
+            other => panic!("expected PeekResult, got {other:?}"),
+        };
+        if data_len > 0 {
+            let bytes = loop {
+                let frame = read_frame(&mut c).await.unwrap();
+                if frame.kind == KIND_DATA {
+                    break frame.payload;
+                }
+            };
+            let text = String::from_utf8_lossy(&bytes);
+            // 打ち込んだ行の `$$` ではなく、展開された出力の方を拾う。
+            if let Some(n) = text
+                .split("SHELL_PID_")
+                .filter_map(|s| s.split("_END").next())
+                .find_map(|s| s.parse::<u64>().ok())
+            {
+                said = Some(n);
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(said, Some(pid), "ls --json pid is not the shell's own $$");
+}
+
 /// berthd が居なければ、`berth ls --json` は起こさずに「居ない」と言い、rc 0 で終わる。
 #[cfg(unix)]
 #[test]

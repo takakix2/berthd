@@ -271,6 +271,7 @@ impl Conn {
                     info.rows = rows;
                 }
                 info.program_status = s.output.lock().ok().and_then(|o| o.program_status());
+                info.pid = s.pid;
                 info
             })
             .collect();

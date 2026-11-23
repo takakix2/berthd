@@ -113,7 +113,7 @@ berth attach work     # Reattach to the same session
 | `berth attach -r <name>` | Attach in read-only mode (keystrokes and resize disabled; exit with `q` or `Ctrl-C`) |
 | `berth attach --no-scrollback [<name>]` | Skip scrollback replay and restore only the current screen state (see below) |
 | `berth detach [<name>]` (`d`) | Detach from session (defaults to current session; disconnects all attached clients) |
-| `berth ls [--json]` | List active sessions (`*` marks the current session). `--json` prints one JSON document for scripts (`berthd_running`, and each session's `id`, `name`, `shell`, `cwd`, `alive`, size and `program_status`); it never starts `berthd` |
+| `berth ls [--json]` | List active sessions (`*` marks the current session). `--json` prints one JSON document for scripts (`berthd_running`, and each session's `id`, `name`, `shell`, `cwd`, `alive`, size, `program_status` and `pid` — the session shell's process ID, protocol 16); it never starts `berthd` |
 | `berth rename [<session>] <name>` (`r`) | Rename a session (defaults to current session) |
 | `berth send <session> [<text>...]` | Type into a session without attaching (appends Enter; see below) |
 | `berth peek <session> [--lines N] [--json]` | Show a session's recent screen as plain text, with idle time (see below) |

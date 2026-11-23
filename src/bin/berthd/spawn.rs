@@ -320,6 +320,8 @@ pub(crate) async fn spawn_session(
         rows,
         // 今の値は `List` のたびに `SessionOutput` から引く（ここは控え）。
         program_status: None,
+        // `List` のたびに `Session.pid` から入れる（ここは控え）。
+        pid: None,
     };
     let spawned = Spawned {
         id: id.clone(),

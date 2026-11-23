@@ -198,6 +198,7 @@ fn ls_json(running: bool, sessions: &[SessionInfo]) -> serde_json::Value {
                 "cols": s.cols,
                 "rows": s.rows,
                 "program_status": s.program_status,
+                "pid": s.pid,
             })
         })
         .collect();
@@ -804,6 +805,7 @@ mod tests {
             cols: 80,
             rows: 24,
             program_status: st,
+            pid: if id == "a" { Some(4242) } else { None },
         };
         let blocked = ProgramStatus {
             state: "blocked".into(),
@@ -821,6 +823,9 @@ mod tests {
         assert_eq!(rows[0]["program_status"]["state"], "blocked");
         assert_eq!(rows[0]["program_status"]["kind"], "permission");
         assert_eq!(rows[0]["program_status"]["age_ms"], 7_000);
+        assert_eq!(rows[0]["pid"], 4242);
+        // pid が分からない（古い berthd）ときも欄は落とさず null。
+        assert!(rows[1]["pid"].is_null());
         // 名乗っていない物は欄ごと落とさず null（「欄が無い」と「名乗っていない」を混ぜない）。
         assert!(rows[1].as_object().unwrap().contains_key("program_status"));
         assert!(rows[1]["program_status"].is_null());
