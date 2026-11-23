@@ -115,6 +115,8 @@ berth attach work     # Reattach to the same session
 | `berth detach [<name>]` (`d`) | Detach from session (defaults to current session; disconnects all attached clients) |
 | `berth ls` | List active sessions (`*` marks the current session) |
 | `berth rename [<session>] <name>` (`r`) | Rename a session (defaults to current session) |
+| `berth send <session> [<text>...]` | Type into a session without attaching (appends Enter; see below) |
+| `berth peek <session> [--lines N] [--json]` | Show a session's recent screen as plain text, with idle time (see below) |
 | `berth kill <session>` | Terminate a session (including child shell processes) |
 | `berth info` | Display daemon connection info (host & version) and the resolved shell for new sessions |
 | `berth kill-server [-f]` | Stop the `berthd` daemon (requires `-f` if active sessions remain) |
@@ -149,6 +151,24 @@ berth attach -s powershell.exe win   # Specify a shell on Windows
 - **Exclusive control for interactive client**: Only one client may send keyboard input (write) to a session at any given time. If another client connects via `berth attach`, the preceding interactive client is automatically detached (displaying `[detached from …]`), preventing input collision and corruption while the underlying shell continues uninterrupted.
 - **Concurrent read-only clients**: Multiple viewers may attach simultaneously using `-r`. Because terminal window dimensions follow the active interactive client, full-screen applications may appear misaligned if a viewer terminal is smaller than the primary client.
 - **Automatic drop for lagging viewers**: If a read-only client's buffer fills due to rendering latency, only the lagging viewer is dropped, ensuring the primary interactive client is never blocked.
+
+### Sending Input and Peeking Without Attaching (`send` / `peek`)
+
+Scripts and monitoring agents can drive a session from outside without taking it over. Neither command attaches, so an interactive client that is already attached stays attached.
+
+```bash
+berth send work 'make test'          # types "make test" and presses Enter
+berth send work --no-enter y         # types "y" without Enter
+berth send work --ctrl-c             # sends Ctrl-C (0x03)
+echo 'git status' | berth send work --stdin
+berth peek work                      # last 30 lines of the screen, as plain text
+berth peek work --lines 5 --json     # structured output for scripts
+```
+
+- **`send`**: Text arguments are joined with spaces and followed by Enter (`\r`) unless `--no-enter` is given. With `--stdin`, one trailing newline from standard input is dropped so the command does not run twice. Use `--` before text that starts with `-`.
+- **Loop guard**: If a session produces no output at all between sends, `berthd` refuses the 6th consecutive send with `send_loop_limit`. This stops a runaway script from typing into a session that is not responding. `--force` skips the check.
+- **`peek`**: Renders the session's recent output (up to 128 KB) through a terminal emulator and prints it without colors or escape sequences, with soft-wrapped lines rejoined. `--json` prints `session_id`, `name`, `cols`, `rows`, `idle_ms` (milliseconds since the session last produced output), `attached`, `in_alt_screen` and `lines`.
+- **Version**: Both commands need a `berthd` that speaks protocol 14 or later. Against an older daemon they exit with an error instead of waiting for a reply that will not come.
 
 ---
 
@@ -241,6 +261,7 @@ CLAUDE_CODE_SHELL = "~/.local/libexec/hsh-as-bash/bash"
 | `spawn:started` | Session created | Target shell (`shell`), resolution source (`shell_src`), working directory (`cwd`) |
 | `spawn:failed` | Shell spawn failed | Attempted shell (`shell` / `shell_src`), failure reason (`reason`) |
 | `attach:start` / `attach:end` | Client connected / disconnected | Connecting process attributes, session duration, exit reason (`how`) |
+| `session:send_keys` | `berth send` delivered input | Connecting process attributes and the number of bytes sent (`bytes`). The text itself is not recorded, since it may contain passwords |
 
 Each log entry records both **kernel-observed process attributes** (`peer_uid`, `peer_pid`, `peer_auid`, `peer_ancestry`) and **client-reported identity metadata** (`actor`, `actor_src`, retrieved from `AUDIT_ACTOR` or `AI_AGENT`, unverified). In environments where human developers and autonomous AI agents operate under identical UID privileges, dual-layer logging enables reconciliation between OS-level provenance and application claims.
 

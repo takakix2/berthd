@@ -8,10 +8,8 @@ use crate::session::{
 };
 #[cfg(target_os = "linux")]
 use crate::session_scope;
-use berthd::replay_head::HeadTracker;
 use berthd::SessionInfo;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use std::collections::VecDeque;
 use std::io::Read;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -301,17 +299,7 @@ pub(crate) async fn spawn_session(
     let writer: SharedWriter = Arc::new(StdMutex::new(Some(writer)));
     spawn_writer_thread(writer.clone(), write_rx);
 
-    let output = Arc::new(StdMutex::new(SessionOutput {
-        replay_buf: VecDeque::new(),
-        head: HeadTracker::default(),
-        produced: 0,
-        sink: None,
-        sink_kick: None,
-        viewers: Vec::new(),
-        dropped_bytes: 0,
-        dropped_events: 0,
-        dropped_since: None,
-    }));
+    let output = Arc::new(StdMutex::new(SessionOutput::new()));
 
     // 採番→insert を同じロックで行う（空き番号の二重採番レースを防ぐ）。表示名は空きの最小 N。
     // shell 列は client が渡した label 優先（client が自分の実行ファイルをシェルとして起こす形では、

@@ -65,9 +65,37 @@ pub(crate) struct SessionOutput {
     pub(crate) dropped_bytes: u64,
     pub(crate) dropped_events: u32,
     pub(crate) dropped_since: Option<std::time::Instant>,
+    /// セッション作成時刻（一度も出力が無いときの `idle_ms` 基準）。
+    pub(crate) created_at: std::time::Instant,
+    /// 最後に PTY から出力があった時刻（`stage` が更新する）。
+    pub(crate) last_output: Option<std::time::Instant>,
+    /// 直近の `SendKeys` 送信時点での `produced`。無反応のままの連打検知に使う。
+    pub(crate) last_send_produced: Option<u64>,
+    /// `produced` が進まないまま連続で `SendKeys` された回数。
+    pub(crate) consecutive_sends: u32,
 }
 
+/// 出力が進まないまま連続で `SendKeys` できる上限回数（無限ループ防止）。
+pub(crate) const SEND_LOOP_LIMIT: u32 = 5;
+
 impl SessionOutput {
+    pub(crate) fn new() -> Self {
+        Self {
+            replay_buf: VecDeque::new(),
+            head: HeadTracker::default(),
+            produced: 0,
+            sink: None,
+            sink_kick: None,
+            viewers: Vec::new(),
+            dropped_bytes: 0,
+            dropped_events: 0,
+            dropped_since: None,
+            created_at: std::time::Instant::now(),
+            last_output: None,
+            last_send_produced: None,
+            consecutive_sends: 0,
+        }
+    }
     /// replay_buf へ追記し、送るべき物を返す（注意: このロックの中では送らない）。
     ///
     /// `sink` は `tokio::mpsc` なので待つには `.await` が要るが、ここは `std::sync::Mutex` の中で、
@@ -81,6 +109,9 @@ impl SessionOutput {
     ) -> Option<(mpsc::Sender<SessionEvent>, Option<SessionEvent>)> {
         self.replay_buf.extend(bytes.iter().copied());
         self.produced += bytes.len() as u64;
+        if !bytes.is_empty() {
+            self.last_output = Some(std::time::Instant::now());
+        }
         self.trim_head();
         let s = self.sink.clone()?;
         // 溜まっていた報告はここで取り切る。溢れでは増えない（背圧で待つ）が、
@@ -112,6 +143,62 @@ impl SessionOutput {
 
     fn snapshot(&self) -> Vec<u8> {
         self.replay_buf.iter().copied().collect()
+    }
+
+    /// 最後に PTY 出力があってからの経過ミリ秒（未出力なら作成からの経過）。
+    pub(crate) fn idle_ms(&self) -> u64 {
+        let base = self.last_output.unwrap_or(self.created_at);
+        u64::try_from(base.elapsed().as_millis()).unwrap_or(u64::MAX)
+    }
+
+    /// 覗き見（`Peek`）用に末尾最大 `max_bytes` を切り出す。
+    ///
+    /// 切り口が命令・文字の途中にならないよう [`HeadTracker::at_boundary`] まで進める。
+    /// 返り: `(bytes, replay_head, idle_ms, produced, attached)`。
+    pub(crate) fn peek_tail(
+        &self,
+        max_bytes: Option<usize>,
+    ) -> (Vec<u8>, Option<berth_protocol::ReplayHead>, u64, u64, bool) {
+        let buf = self.snapshot();
+        let (slice, head) = match max_bytes {
+            Some(max) if buf.len() > max => {
+                let mut skip = buf.len() - max;
+                let mut head = self.head.clone();
+                for &b in &buf[..skip] {
+                    head.feed(b);
+                }
+                while skip < buf.len() && !head.at_boundary() {
+                    head.feed(buf[skip]);
+                    skip += 1;
+                }
+                (buf[skip..].to_vec(), head.head())
+            }
+            _ => (buf, self.head.head()),
+        };
+        (
+            slice,
+            head,
+            self.idle_ms(),
+            self.produced,
+            self.sink.is_some(),
+        )
+    }
+
+    /// `SendKeys` の連続無応答送信を数えてループを防ぐ。
+    ///
+    /// 前回の送信から `produced` が 1 バイトも増えていない送信が [`SEND_LOOP_LIMIT`] 回を超えると
+    /// `Err(SEND_LOOP_LIMIT)` を返す（`force: true` のときは上限を無視して通過させる）。
+    pub(crate) fn check_and_record_send(&mut self, force: bool) -> Result<(), u32> {
+        let next_count = match self.last_send_produced {
+            Some(prev) if prev == self.produced => self.consecutive_sends + 1,
+            _ => 1,
+        };
+        if !force && next_count > SEND_LOOP_LIMIT {
+            return Err(SEND_LOOP_LIMIT);
+        }
+        self.consecutive_sends = next_count;
+        self.last_send_produced = Some(self.produced);
+        Ok(())
     }
 
     /// attach の録画を切り出す。`seen_total`（前回このペインで見せた累計位置）が録画の中にあれば
@@ -212,17 +299,7 @@ mod head_tests {
     use super::*;
 
     fn out() -> SessionOutput {
-        SessionOutput {
-            replay_buf: VecDeque::new(),
-            head: HeadTracker::default(),
-            produced: 0,
-            sink: None,
-            sink_kick: None,
-            viewers: Vec::new(),
-            dropped_bytes: 0,
-            dropped_events: 0,
-            dropped_since: None,
-        }
+        SessionOutput::new()
     }
 
     fn lines(n: usize) -> Vec<u8> {
@@ -324,17 +401,7 @@ mod resume_tests {
     use super::*;
 
     fn out() -> SessionOutput {
-        SessionOutput {
-            replay_buf: VecDeque::new(),
-            head: HeadTracker::default(),
-            produced: 0,
-            sink: None,
-            sink_kick: None,
-            viewers: Vec::new(),
-            dropped_bytes: 0,
-            dropped_events: 0,
-            dropped_since: None,
-        }
+        SessionOutput::new()
     }
 
     #[test]
@@ -446,20 +513,23 @@ mod drop_report_tests {
 
     fn out_with(cap: usize) -> (SessionOutput, mpsc::Receiver<SessionEvent>) {
         let (tx, rx) = mpsc::channel::<SessionEvent>(cap);
-        (
-            SessionOutput {
-                replay_buf: VecDeque::new(),
-                head: HeadTracker::default(),
-                produced: 0,
-                sink: Some(tx),
-                sink_kick: None,
-                viewers: Vec::new(),
-                dropped_bytes: 0,
-                dropped_events: 0,
-                dropped_since: None,
-            },
-            rx,
-        )
+        let mut o = SessionOutput::new();
+        o.sink = Some(tx);
+        (o, rx)
+    }
+
+    #[test]
+    fn send_loop_limit_blocks_unanswered_repeats_until_output_advances() {
+        let mut o = SessionOutput::new();
+        for _ in 0..SEND_LOOP_LIMIT {
+            assert!(o.check_and_record_send(false).is_ok());
+        }
+        assert_eq!(o.check_and_record_send(false), Err(SEND_LOOP_LIMIT));
+        // force なら通る。
+        assert!(o.check_and_record_send(true).is_ok());
+        // 出力が 1 バイトでも進めばカウンタがリセットされる。
+        o.stage(b"x");
+        assert!(o.check_and_record_send(false).is_ok());
     }
 
     // この一群が見るのは `record_drop` ＋ `stage()`。

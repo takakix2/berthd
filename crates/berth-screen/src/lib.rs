@@ -87,13 +87,12 @@ impl Dimensions for Size {
     }
 }
 
-/// `replay` を `cols × rows` の端末として再生し、描き直した行を返す。
-///
-/// 空の録画（新しいセッション）は空を返す。呼ぶ側は何も書かない（バナーだけ、すなわち今までの見え方）。
-pub fn render(replay: &[u8], cols: u16, rows: u16) -> Rendered {
-    if replay.is_empty() {
-        return Rendered::default();
-    }
+/// `replay` を `cols × rows` の端末として再生した状態を作る（[`render`] と [`render_plain`] の共通部）。
+fn replay_into_term(
+    replay: &[u8],
+    cols: u16,
+    rows: u16,
+) -> (Term<TitleListener>, Size, Option<String>) {
     // alacritty の下限（幅 2 は全角 1 文字のため・高さ 1）。
     let size = Size {
         cols: (cols as usize).max(2),
@@ -107,9 +106,20 @@ pub fn render(replay: &[u8], cols: u16, rows: u16) -> Rendered {
     let mut term = Term::new(config, &size, TitleListener(seen_title.clone()));
     let mut parser: Processor = Processor::new();
     parser.advance(&mut term, replay);
+    let title = seen_title.borrow().clone();
+    (term, size, title)
+}
+
+/// `replay` を `cols × rows` の端末として再生し、描き直した行を返す。
+///
+/// 空の録画（新しいセッション）は空を返す。呼ぶ側は何も書かない（バナーだけ、すなわち今までの見え方）。
+pub fn render(replay: &[u8], cols: u16, rows: u16) -> Rendered {
+    if replay.is_empty() {
+        return Rendered::default();
+    }
+    let (term, size, title) = replay_into_term(replay, cols, rows);
 
     let in_alt_screen = term.mode().contains(TermMode::ALT_SCREEN);
-    let title = seen_title.borrow().clone();
     let grid = term.grid();
     let mut sgr = Sgr::default();
 
@@ -137,6 +147,76 @@ pub fn render(replay: &[u8], cols: u16, rows: u16) -> Rendered {
         in_alt_screen,
         cursor_row_len,
         title,
+    }
+}
+
+/// プレーンテキストとして取り出した画面の状態（`berth peek` 用）。
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct PlainScreen {
+    /// 論理行（soft wrap は連結済み、末尾の空行は除去済み）。
+    pub lines: Vec<String>,
+    pub cursor: (u16, u16),
+    pub in_alt_screen: bool,
+}
+
+/// `replay` を `cols × rows` の端末として再生し、ANSI 装飾なしの論理行を返す。
+///
+/// alt screen の中は表示中の格子だけ、通常時はスクロールバックと現在の画面を合わせた行を返す。
+pub fn render_plain(replay: &[u8], cols: u16, rows: u16) -> PlainScreen {
+    if replay.is_empty() {
+        return PlainScreen::default();
+    }
+    let (term, size, _) = replay_into_term(replay, cols, rows);
+    let in_alt_screen = term.mode().contains(TermMode::ALT_SCREEN);
+    let grid = term.grid();
+    let cursor = cursor_of(grid, &size);
+
+    let mut lines: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let push_row = |row: &Row<Cell>, lines: &mut Vec<String>, current: &mut String| {
+        let len = row.line_length().0;
+        for col in 0..len {
+            let cell = &row[Column(col)];
+            if cell
+                .flags
+                .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
+            {
+                continue;
+            }
+            current.push(cell.c);
+            if let Some(zw) = cell.zerowidth() {
+                for &c in zw {
+                    current.push(c);
+                }
+            }
+        }
+        let wrapped = len > 0 && row[Column(len - 1)].flags.contains(Flags::WRAPLINE);
+        if !wrapped {
+            lines.push(std::mem::take(current));
+        }
+    };
+
+    if !in_alt_screen {
+        let history = grid.history_size();
+        for i in 0..history {
+            let line = Line(i as i32 - history as i32);
+            push_row(&grid[line], &mut lines, &mut current);
+        }
+    }
+    for i in 0..size.rows {
+        push_row(&grid[Line(i as i32)], &mut lines, &mut current);
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    while lines.last().is_some_and(|l| l.is_empty()) {
+        lines.pop();
+    }
+
+    PlainScreen {
+        lines,
+        cursor,
+        in_alt_screen,
     }
 }
 
@@ -481,5 +561,12 @@ mod tests {
     fn a_query_in_the_replay_is_inert() {
         let r = render(b"x\x1b[6n\x1b[cy\r\n", 80, 24);
         assert_eq!(lines(&r.screen)[0], "xy");
+    }
+
+    #[test]
+    fn render_plain_strips_ansi_and_joins_wrapped_lines() {
+        let p = render_plain(b"\x1b[32mok\x1b[0m\r\nabcdefghij\r\n> ", 6, 4);
+        assert!(!p.in_alt_screen);
+        assert_eq!(p.lines, vec!["ok", "abcdefghij", ">"]);
     }
 }

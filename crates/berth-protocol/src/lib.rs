@@ -69,7 +69,11 @@ pub const KIND_DATA: u8 = 1;
 ///   `[seen_total, replay_total)` だけ返す（頭の状態は 12 の `ReplayHead` で作り直す）。
 ///   版ゲートは要らない。古い berthd は `seen_total` を捨てて録画をそのまま全量返し、`replay_total` を
 ///   送らない（`None`）。client は `replay_total` が `None` なら続きだけ流すのをやめる（今までどおり）。
-pub const PROTOCOL_VERSION: u32 = 13;
+/// - 14: `SendKeys` / `SendKeysAck` / `Peek` / `PeekResult`: attach せずに外からキー入力を差し込み、
+///   セッションの画面状態と無出力時間（`idle_ms`）を覗く口。
+///   版ゲートが要る。古い berthd は未知の制御メッセージを黙って捨てるため、client は応答を待って
+///   ハングする。∴ client は `Welcome.protocol >= 14` を確認してから送ること。
+pub const PROTOCOL_VERSION: u32 = 14;
 
 /// Rheon Protocol v1 のエンベロープの既定値。
 pub const RHEON_V: u32 = 1;
@@ -238,6 +242,25 @@ pub enum Control {
     /// socket が残る）ので、生死は「応答フレームが返るか」でしか測れない。
     /// 出力ストリーム（data フレーム）に割り込んで送られるので、berthd は attach 有無に依らず即返す。
     Ping,
+    /// attach せずにセッションの PTY へバイト列を差し込む（protocol 14+）。
+    ///
+    /// 既に操作側クライアントが attach していても追い出さずに書き込む。
+    /// `force: false` のとき、前回の送信からセッション出力（`produced`）が進んでいない連続送信が
+    /// 上限に達すると `Error { code: "send_loop_limit", .. }` で拒否する。
+    SendKeys {
+        session_id: String,
+        data: Vec<u8>,
+        #[serde(default)]
+        force: bool,
+    },
+    /// セッションの現在の状態（`idle_ms` / `attached`）と直近の録画を覗く（protocol 14+）。
+    ///
+    /// `PeekResult` の直後に `KIND_DATA` フレーム 1 本で生バイト列（`data_len` バイト）を返す。
+    Peek {
+        session_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_bytes: Option<usize>,
+    },
 
     // ── server → client ──
     Welcome {
@@ -324,6 +347,23 @@ pub enum Control {
         events: u32,
         /// この通知が覆う区間（ms）。0 は「測れなかった」ではなく「同じ tick 内」。
         window_ms: u32,
+    },
+    /// `SendKeys` の受理応答（protocol 14+）。
+    SendKeysAck {
+        session_id: String,
+        bytes: usize,
+    },
+    /// `Peek` への応答（protocol 14+）。`data_len > 0` なら直後に `KIND_DATA` フレームが 1 本続く。
+    PeekResult {
+        session_id: String,
+        data_len: usize,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        replay_head: Option<ReplayHead>,
+        cols: u16,
+        rows: u16,
+        idle_ms: u64,
+        produced: u64,
+        attached: bool,
     },
     Error {
         code: String,
@@ -1002,6 +1042,60 @@ mod tests {
         assert_eq!(got.kind, KIND_DATA);
         assert_eq!(got.serial, 0);
         assert_eq!(got.payload, sent.payload);
+    }
+
+    #[test]
+    fn send_keys_and_peek_roundtrip_through_rheon_envelope() {
+        let send = Control::SendKeys {
+            session_id: "s1".into(),
+            data: b"echo ok\r".to_vec(),
+            force: false,
+        };
+        let decoded = decode_control(&encode_control("berth", &send)).unwrap();
+        match decoded {
+            Control::SendKeys {
+                session_id,
+                data,
+                force,
+            } => {
+                assert_eq!(session_id, "s1");
+                assert_eq!(data, b"echo ok\r");
+                assert!(!force);
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
+
+        let peek = Control::PeekResult {
+            session_id: "s1".into(),
+            data_len: 42,
+            replay_head: None,
+            cols: 80,
+            rows: 24,
+            idle_ms: 1200,
+            produced: 4096,
+            attached: true,
+        };
+        let decoded = decode_control(&encode_control("berthd", &peek)).unwrap();
+        match decoded {
+            Control::PeekResult {
+                session_id,
+                data_len,
+                cols,
+                rows,
+                idle_ms,
+                produced,
+                attached,
+                ..
+            } => {
+                assert_eq!(session_id, "s1");
+                assert_eq!(data_len, 42);
+                assert_eq!((cols, rows), (80, 24));
+                assert_eq!(idle_ms, 1200);
+                assert_eq!(produced, 4096);
+                assert!(attached);
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
     }
 }
 

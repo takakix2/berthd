@@ -1,6 +1,8 @@
-use crate::wire::{explain, handshake, request, send, Welcome};
+use crate::wire::{explain, handshake, next_control, request, send, send_ctrl, Welcome};
 use crate::{connect_daemon, say, USAGE};
-use berthd::{endpoint_display, Control, SessionInfo, Unreachable, PROTOCOL_VERSION};
+use berthd::{
+    endpoint_display, read_frame, Control, SessionInfo, Unreachable, KIND_DATA, PROTOCOL_VERSION,
+};
 
 pub(crate) async fn list() -> Result<Vec<SessionInfo>, String> {
     match request(&Control::List).await? {
@@ -370,9 +372,366 @@ pub(crate) async fn cmd_detach(args: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// `berth send` / `berth peek` で要求する最小プロトコル版（14）。
+const MIN_PROTO_SEND_PEEK: u32 = 14;
+
+fn protocol_too_old_msg(protocol: u32, need: u32) -> String {
+    format!(
+        "berth: running berthd has protocol {protocol}, need >= {need}. \
+         Replace it with `berth kill-server` (add -f to take live sessions down with it)."
+    )
+}
+
+async fn connect_v14() -> Result<
+    (
+        tokio::io::ReadHalf<berthd::DaemonStream>,
+        tokio::io::WriteHalf<berthd::DaemonStream>,
+    ),
+    String,
+> {
+    let sock = endpoint_display();
+    let stream = match connect_daemon().await {
+        Ok(s) => s,
+        Err(e) => return Err(explain(&Unreachable::of(e), &sock)),
+    };
+    let (mut rd, mut wr) = tokio::io::split(stream);
+    let Welcome { protocol, .. } = handshake(&mut rd, &mut wr).await?;
+    if protocol < MIN_PROTO_SEND_PEEK {
+        return Err(protocol_too_old_msg(protocol, MIN_PROTO_SEND_PEEK));
+    }
+    Ok((rd, wr))
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct SendArgs {
+    handle: String,
+    data: Vec<u8>,
+    force: bool,
+}
+
+fn parse_send_args(args: &[String], stdin_bytes: Option<&[u8]>) -> Result<SendArgs, String> {
+    let mut handle: Option<String> = None;
+    let mut no_enter = false;
+    let mut ctrl_c = false;
+    let mut force = false;
+    let mut use_stdin = false;
+    let mut parts: Vec<&str> = Vec::new();
+    let mut rest_literal = false;
+
+    for a in args {
+        if !rest_literal {
+            match a.as_str() {
+                "--" => {
+                    rest_literal = true;
+                    continue;
+                }
+                "--no-enter" => {
+                    no_enter = true;
+                    continue;
+                }
+                "--ctrl-c" => {
+                    ctrl_c = true;
+                    continue;
+                }
+                "--force" => {
+                    force = true;
+                    continue;
+                }
+                "--stdin" => {
+                    use_stdin = true;
+                    continue;
+                }
+                s if s.starts_with('-') && handle.is_some() => {
+                    return Err(format!("berth send: unknown option `{s}`\n\n{USAGE}"));
+                }
+                _ => {}
+            }
+        }
+        if handle.is_none() {
+            handle = Some(a.clone());
+        } else {
+            parts.push(a.as_str());
+        }
+    }
+
+    let handle = handle.ok_or_else(|| format!("berth send: name a target\n\n{USAGE}"))?;
+    let mut data = Vec::new();
+    if ctrl_c {
+        if !parts.is_empty() || use_stdin {
+            return Err("berth send: --ctrl-c cannot be combined with text or --stdin".into());
+        }
+        data.push(0x03);
+        return Ok(SendArgs {
+            handle,
+            data,
+            force,
+        });
+    }
+    if use_stdin {
+        if !parts.is_empty() {
+            return Err("berth send: --stdin cannot be combined with text arguments".into());
+        }
+        if let Some(bytes) = stdin_bytes {
+            // 末尾の改行 1 つは、このあと付ける Enter と重なって 2 回実行になるので落とす。
+            let bytes = match bytes {
+                [rest @ .., b'\r', b'\n'] | [rest @ .., b'\n'] if !no_enter => rest,
+                all => all,
+            };
+            data.extend_from_slice(bytes);
+        }
+    } else {
+        if parts.is_empty() && no_enter {
+            return Err("berth send: nothing to send".into());
+        }
+        data.extend_from_slice(parts.join(" ").as_bytes());
+    }
+    if !no_enter {
+        data.push(b'\r');
+    }
+    Ok(SendArgs {
+        handle,
+        data,
+        force,
+    })
+}
+
+pub(crate) async fn cmd_send(args: &[String]) -> Result<(), String> {
+    let want_stdin = args.iter().any(|a| a == "--stdin") && !args.iter().any(|a| a == "--ctrl-c");
+    let stdin_buf = if want_stdin {
+        use std::io::Read as _;
+        let mut buf = Vec::new();
+        std::io::stdin()
+            .read_to_end(&mut buf)
+            .map_err(|e| format!("berth send: stdin: {e}"))?;
+        Some(buf)
+    } else {
+        None
+    };
+    let parsed = parse_send_args(args, stdin_buf.as_deref())?;
+    let sessions = list().await?;
+    let target = resolve(&sessions, &parsed.handle)?;
+
+    let (mut rd, mut wr) = connect_v14().await?;
+    send_ctrl(
+        &mut wr,
+        2,
+        &Control::SendKeys {
+            session_id: target.id.clone(),
+            data: parsed.data,
+            force: parsed.force,
+        },
+    )
+    .await
+    .map_err(|e| format!("berth: send failed: {e}"))?;
+
+    match next_control(&mut rd).await? {
+        Control::SendKeysAck { .. } => Ok(()),
+        Control::Error { message, .. } => Err(format!("berth: {message}")),
+        other => Err(format!("berth: unexpected reply to send: {other:?}")),
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct PeekArgs {
+    handle: String,
+    lines: usize,
+    json: bool,
+}
+
+fn parse_peek_args(args: &[String]) -> Result<PeekArgs, String> {
+    let mut handle: Option<String> = None;
+    let mut lines: usize = 30;
+    let mut json = false;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--lines" | "-n" => {
+                let v = it
+                    .next()
+                    .ok_or_else(|| "berth peek: --lines requires a number".to_string())?;
+                lines = v
+                    .parse::<usize>()
+                    .map_err(|_| format!("berth peek: invalid --lines value `{v}`"))?;
+            }
+            s if s.starts_with('-') => {
+                return Err(format!("berth peek: unknown option `{s}`\n\n{USAGE}"));
+            }
+            _ if handle.is_none() => handle = Some(a.clone()),
+            other => {
+                return Err(format!(
+                    "berth peek: unexpected argument `{other}`\n\n{USAGE}"
+                ))
+            }
+        }
+    }
+    let handle = handle.ok_or_else(|| format!("berth peek: name a target\n\n{USAGE}"))?;
+    Ok(PeekArgs {
+        handle,
+        lines,
+        json,
+    })
+}
+
+/// `Peek` の応答を画面にする。
+///
+/// 録画は末尾だけが届くので、切られた分が残した状態（alt screen・装飾）は `replay_head` から作り直して
+/// 頭に付ける。付けないと、alt screen の中に居るセッションを通常画面として読んでしまう。
+/// 作り直しの改行が頭に積む空行は、切れた頭の手前なので落とす。
+fn peek_screen(
+    head: Option<&berth_protocol::ReplayHead>,
+    bytes: &[u8],
+    cols: u16,
+    rows: u16,
+) -> berth_screen::PlainScreen {
+    let Some(head) = head else {
+        return berth_screen::render_plain(bytes, cols, rows);
+    };
+    let mut replay = berthd::replay_head::head_prefix(head, rows);
+    replay.extend_from_slice(bytes);
+    let mut screen = berth_screen::render_plain(&replay, cols, rows);
+    let blank = screen.lines.iter().take_while(|l| l.is_empty()).count();
+    screen.lines.drain(..blank);
+    screen
+}
+
+pub(crate) async fn cmd_peek(args: &[String]) -> Result<(), String> {
+    const PEEK_MAX_BYTES: usize = 128 * 1024;
+    let parsed = parse_peek_args(args)?;
+    let sessions = list().await?;
+    let target = resolve(&sessions, &parsed.handle)?;
+
+    let (mut rd, mut wr) = connect_v14().await?;
+    send_ctrl(
+        &mut wr,
+        2,
+        &Control::Peek {
+            session_id: target.id.clone(),
+            max_bytes: Some(PEEK_MAX_BYTES),
+        },
+    )
+    .await
+    .map_err(|e| format!("berth: send failed: {e}"))?;
+
+    let (data_len, replay_head, cols, rows, idle_ms, attached) = match next_control(&mut rd).await?
+    {
+        Control::PeekResult {
+            data_len,
+            replay_head,
+            cols,
+            rows,
+            idle_ms,
+            attached,
+            ..
+        } => (data_len, replay_head, cols, rows, idle_ms, attached),
+        Control::Error { message, .. } => return Err(format!("berth: {message}")),
+        other => return Err(format!("berth: unexpected reply to peek: {other:?}")),
+    };
+
+    let bytes = if data_len > 0 {
+        loop {
+            let f = read_frame(&mut rd)
+                .await
+                .map_err(|e| format!("berth: read: {e}"))?;
+            if f.kind == KIND_DATA {
+                break f.payload;
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
+    let screen = peek_screen(replay_head.as_ref(), &bytes, cols, rows);
+    let tail: Vec<String> = if parsed.lines == 0 {
+        Vec::new()
+    } else {
+        let start = screen.lines.len().saturating_sub(parsed.lines);
+        screen.lines[start..].to_vec()
+    };
+
+    if parsed.json {
+        let doc = serde_json::json!({
+            "session_id": target.id,
+            "name": target.name,
+            "cols": cols,
+            "rows": rows,
+            "idle_ms": idle_ms,
+            "attached": attached,
+            "in_alt_screen": screen.in_alt_screen,
+            "lines": tail,
+        });
+        say!("{doc}");
+    } else {
+        for line in &tail {
+            say!("{line}");
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::cwd_mark;
+
+    fn argv(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| (*s).to_string()).collect()
+    }
+
+    #[test]
+    fn send_appends_enter_unless_told_not_to() {
+        use super::parse_send_args as p;
+        let got = p(&argv(&["w1", "echo", "hi"]), None).unwrap();
+        assert_eq!(got.handle, "w1");
+        assert_eq!(got.data, b"echo hi\r");
+        assert_eq!(
+            p(&argv(&["w1", "--no-enter", "y"]), None).unwrap().data,
+            b"y"
+        );
+        // 文字なしは Enter だけ。
+        assert_eq!(p(&argv(&["w1"]), None).unwrap().data, b"\r");
+        assert_eq!(p(&argv(&["w1", "--ctrl-c"]), None).unwrap().data, b"\x03");
+        // `--` の後ろはオプションに見えても文字。
+        assert_eq!(
+            p(&argv(&["w1", "--", "--force"]), None).unwrap().data,
+            b"--force\r"
+        );
+        assert!(p(&argv(&["w1", "--bogus"]), None).is_err());
+        assert!(p(&argv(&["w1", "--ctrl-c", "x"]), None).is_err());
+        assert!(p(&argv(&["w1", "--no-enter"]), None).is_err());
+        assert!(p(&argv(&[]), None).is_err());
+    }
+
+    /// `echo cmd | berth send --stdin` の末尾の改行は Enter と重ねない（2 回実行になる）。
+    #[test]
+    fn stdin_trailing_newline_is_not_a_second_enter() {
+        use super::parse_send_args as p;
+        let a = argv(&["w1", "--stdin"]);
+        assert_eq!(p(&a, Some(b"ls\n")).unwrap().data, b"ls\r");
+        assert_eq!(p(&a, Some(b"ls\r\n")).unwrap().data, b"ls\r");
+        assert_eq!(p(&a, Some(b"a\nb\n")).unwrap().data, b"a\nb\r");
+        // `--no-enter` は渡された物をそのまま送る。
+        let raw = argv(&["w1", "--stdin", "--no-enter"]);
+        assert_eq!(p(&raw, Some(b"ls\n")).unwrap().data, b"ls\n");
+    }
+
+    /// 切られた録画の頭が alt screen の中だったなら、覗いた画面も alt screen と答える。
+    #[test]
+    fn a_cut_peek_keeps_the_alt_screen_it_was_in() {
+        use super::peek_screen;
+        let head = berth_protocol::ReplayHead {
+            alt_screen: true,
+            ..Default::default()
+        };
+        let tail = b"status line\r\n> ";
+        assert!(peek_screen(Some(&head), tail, 80, 24).in_alt_screen);
+        assert!(!peek_screen(None, tail, 80, 24).in_alt_screen);
+        // 通常画面で頭が切れているとき、作り直しの改行は空行として残さない。
+        let plain = berth_protocol::ReplayHead::default();
+        assert_eq!(
+            peek_screen(Some(&plain), tail, 80, 24).lines,
+            vec!["status line", ">"]
+        );
+    }
 
     /// `disconnected` は berthd との接続が切れたときだけ。手元の入力・端末が閉じたときは別の文言。
     #[test]
@@ -423,5 +782,13 @@ mod tests {
         // 空文字列は `spawn:` と別の印にする。古い berthd は何も通知しないため、
         // 「起動時の値だと分かっている」と混ぜると嘘になる。
         assert_eq!(cwd_mark(""), " (?)");
+    }
+
+    #[test]
+    fn protocol_too_old_message_explains_kill_server_force_flag() {
+        let msg = super::protocol_too_old_msg(13, 14);
+        assert!(msg.contains("13") && msg.contains("14"), "{msg}");
+        assert!(msg.contains("berth kill-server"), "{msg}");
+        assert!(msg.contains("-f"), "{msg}");
     }
 }

@@ -164,6 +164,15 @@ pub(crate) async fn handle_conn(stream: berthd::DaemonConn, table: Table) {
                 conn.on_rename(serial, session_id, name).await;
             }
             Control::KillServer => conn.kill_server().await,
+            Control::SendKeys {
+                session_id,
+                data,
+                force,
+            } => conn.on_send_keys(serial, session_id, data, force).await,
+            Control::Peek {
+                session_id,
+                max_bytes,
+            } => conn.on_peek(serial, session_id, max_bytes).await,
             // server→client メッセージが来たら無視。
             _ => {}
         }
@@ -399,6 +408,110 @@ impl Conn {
         };
         drop(tbl);
         self.reply(serial, &reply).await;
+    }
+
+    async fn on_send_keys(&self, serial: u32, session_id: String, data: Vec<u8>, force: bool) {
+        let bytes = data.len();
+        let (tx, name, outcome) = {
+            let tbl = self.table.lock().await;
+            let Some(sess) = tbl.get(&session_id) else {
+                drop(tbl);
+                self.reply(
+                    serial,
+                    &Control::Error {
+                        code: "no_such_session".into(),
+                        message: format!("{session_id} not found"),
+                    },
+                )
+                .await;
+                return;
+            };
+            let check = sess
+                .output
+                .lock()
+                .map(|mut o| o.check_and_record_send(force))
+                .unwrap_or(Ok(()));
+            (sess.write_tx.clone(), sess.info.name.clone(), check)
+        };
+        if let Err(limit) = outcome {
+            self.reply(
+                serial,
+                &Control::Error {
+                    code: "send_loop_limit".into(),
+                    message: format!(
+                        "refusing send after {limit} consecutive sends without session output (pass --force to override)"
+                    ),
+                },
+            )
+            .await;
+            return;
+        }
+        if tx.send(data).await.is_err() {
+            self.reply(
+                serial,
+                &Control::Error {
+                    code: "session_closed".into(),
+                    message: format!("{session_id} is closing"),
+                },
+            )
+            .await;
+            return;
+        }
+        let ancestry = berthd::peer_ancestry(self.peer.pid);
+        journal(&berthd::send_keys_record(
+            &session_id,
+            &name,
+            self.peer,
+            &ancestry,
+            self.client.as_deref(),
+            &hostname(),
+            bytes,
+        ));
+        self.reply(serial, &Control::SendKeysAck { session_id, bytes })
+            .await;
+    }
+
+    async fn on_peek(&self, serial: u32, session_id: String, max_bytes: Option<usize>) {
+        let (bytes, replay_head, cols, rows, idle_ms, produced, attached) = {
+            let tbl = self.table.lock().await;
+            let Some(sess) = tbl.get(&session_id) else {
+                drop(tbl);
+                self.reply(
+                    serial,
+                    &Control::Error {
+                        code: "no_such_session".into(),
+                        message: format!("{session_id} not found"),
+                    },
+                )
+                .await;
+                return;
+            };
+            let (cols, rows) = live_size(&sess.master).unwrap_or((sess.info.cols, sess.info.rows));
+            let (bytes, replay_head, idle_ms, produced, attached) = sess
+                .output
+                .lock()
+                .map(|o| o.peek_tail(max_bytes))
+                .unwrap_or_else(|_| (Vec::new(), None, 0, 0, false));
+            (bytes, replay_head, cols, rows, idle_ms, produced, attached)
+        };
+        let data_len = bytes.len();
+        self.reply(
+            serial,
+            &Control::PeekResult {
+                session_id,
+                data_len,
+                replay_head,
+                cols,
+                rows,
+                idle_ms,
+                produced,
+                attached,
+            },
+        )
+        .await;
+        if data_len > 0 {
+            let _ = send(&self.wr, &Frame::data(0, bytes)).await;
+        }
     }
 
     async fn kill_server(&self) {

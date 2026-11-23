@@ -370,3 +370,19 @@ pub fn attach_record(
     }
     serde_json::Value::Object(m)
 }
+
+/// `SendKeys` の記録。入力内容そのものは機密を含みうるため記録せず、送信バイト数だけ残す。
+pub fn send_keys_record(
+    berthd_session: &str,
+    name: &str,
+    peer: Peer,
+    ancestry: &Ancestry,
+    client: Option<&str>,
+    host: &str,
+    bytes: usize,
+) -> serde_json::Value {
+    let mut m = rheon_envelope("session", "send_keys", berthd_session, name, host);
+    m.insert("bytes".into(), serde_json::json!(bytes));
+    put_observation(&mut m, peer, ancestry, client);
+    serde_json::Value::Object(m)
+}

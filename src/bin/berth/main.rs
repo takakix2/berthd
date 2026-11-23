@@ -61,7 +61,9 @@ mod daemon_start;
 mod wire;
 
 use crate::attach::cmd_attach;
-use crate::commands::{cmd_detach, cmd_info, cmd_kill, cmd_kill_server, cmd_ls, cmd_rename};
+use crate::commands::{
+    cmd_detach, cmd_info, cmd_kill, cmd_kill_server, cmd_ls, cmd_peek, cmd_rename, cmd_send,
+};
 use crate::wire::warn_if_stale;
 
 /// 設定ファイル（`~/.berth/config.toml`）を読む。壊れていれば 1 度名乗って、設定なしとして続ける
@@ -99,6 +101,8 @@ USAGE:
     berth info                      show which berthd you're talking to (host / version)
     berth ls                        list sessions (* = this shell)
     berth rename [<session>] <name> (r)  rename a session (defaults to this one)
+    berth send <session> [<text>...]     send input to a session without attaching (appends CR; --no-enter, --ctrl-c, --stdin, --force)
+    berth peek <session> [--lines N] [--json]  inspect a session's recent screen and idle time
     berth kill <session>            close a session (kills its child)
     berth kill-server [-f]          shut berthd down (-f if sessions are alive)
     berth --version                 print this client's version (never contacts berthd)
@@ -133,6 +137,8 @@ async fn main() -> ExitCode {
         "kill-server" => cmd_kill_server(args[1..].iter().any(|a| a == "-f")).await,
         "attach" | "a" => cmd_attach(&args[1..]).await,
         "detach" | "d" => cmd_detach(&args[1..]).await,
+        "send" => cmd_send(&args[1..]).await,
+        "peek" => cmd_peek(&args[1..]).await,
         // berthd に訊かずに答える。`berth info` は daemon の自己申告なので、daemon を止めている間
         // （配備の最中など）は版が分からない。これは client 自身の版なので、誰にも訊かない。
         "-V" | "--version" | "version" => {
