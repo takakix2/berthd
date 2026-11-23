@@ -99,7 +99,7 @@ USAGE:
                                     --scrollback: replay even inside tmux/zellij/screen
     berth detach [<name>]   (d)     detach the session (defaults to the one you're in)
     berth info                      show which berthd you're talking to (host / version)
-    berth ls                        list sessions (* = this shell)
+    berth ls [--json]               list sessions (* = this shell; --json for scripts, never starts berthd)
     berth rename [<session>] <name> (r)  rename a session (defaults to this one)
     berth send <session> [<text>...]     send input to a session without attaching (appends CR; --no-enter, --ctrl-c, --stdin, --force)
     berth peek <session> [--lines N] [--json]  inspect a session's recent screen and idle time
@@ -131,7 +131,7 @@ async fn main() -> ExitCode {
 
     let result = match cmd {
         "info" | "status" => cmd_info().await,
-        "ls" | "list" => cmd_ls().await,
+        "ls" | "list" => cmd_ls(args.get(1..).unwrap_or(&[])).await,
         "rename" | "r" => cmd_rename(&args[1..]).await,
         "kill" | "close" => cmd_kill(&args[1..]).await,
         "kill-server" => cmd_kill_server(args[1..].iter().any(|a| a == "-f")).await,

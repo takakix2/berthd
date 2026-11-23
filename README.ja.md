@@ -105,7 +105,7 @@ berth attach work     # 同一セッションに再アタッチ
 | `berth attach -r <name>`                   | 読み取り専用（read-only）でアタッチ（キー入力・サイズ同期無効、`q` または `Ctrl-C` でデタッチ） |
 | `berth attach --no-scrollback [<name>]`    | スクロールバック再生をスキップし、カレント画面のみを復元（後述）                            |
 | `berth detach [<name>]`（`d`）             | セッションからデタッチ（省略時はカレントセッション。閲覧中の全クライアントがデタッチ）      |
-| `berth ls`                                 | セッション一覧の表示（`*` はカレントセッション）                                             |
+| `berth ls [--json]`                        | セッション一覧の表示（`*` はカレントセッション）。`--json` はスクリプト向けに JSON を 1 つ出力します（`berthd_running` と、各セッションの `id`・`name`・`shell`・`cwd`・`alive`・大きさ・`program_status`）。`berthd` は起こしません |
 | `berth rename [<session>] <name>`（`r`）   | セッション名のリネーム（省略時はカレントセッション）                                        |
 | `berth send <session> [<text>...]`         | アタッチせずにセッションへ入力を送る（末尾に Enter を付与・後述）                           |
 | `berth peek <session> [--lines N] [--json]` | セッションの直近の画面をプレーンテキストで表示（無出力時間つき・後述）                     |

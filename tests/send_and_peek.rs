@@ -329,4 +329,42 @@ async fn berthd_answers_the_osc_7501_probe_and_remembers_the_status() {
         }
         other => panic!("expected Sessions, got {other:?}"),
     }
+
+    // `berth ls --json`（スクリプトが読む口）も同じ状態を返す。
+    let doc = berth_ls_json(&f.endpoint);
+    assert_eq!(doc["berthd_running"], true);
+    let row = doc["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == "agent")
+        .expect("the session is in ls --json");
+    assert_eq!(row["program_status"]["state"], "blocked");
+    assert_eq!(row["program_status"]["kind"], "permission");
+}
+
+/// `berth ls --json` を本物の CLI で撃つ。`BERTHD_NO_SPAWN` を立てる（居なくても起こさない）。
+#[cfg(unix)]
+fn berth_ls_json(endpoint: &std::ffi::OsStr) -> serde_json::Value {
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_berth"))
+        .args(["ls", "--json"])
+        .env("BERTHD_SOCKET", endpoint)
+        .env("BERTHD_NO_SPAWN", "1")
+        .output()
+        .expect("spawn berth");
+    assert!(
+        o.status.success(),
+        "berth ls --json failed: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    serde_json::from_slice(&o.stdout).expect("berth ls --json prints one JSON document")
+}
+
+/// berthd が居なければ、`berth ls --json` は起こさずに「居ない」と言い、rc 0 で終わる。
+#[cfg(unix)]
+#[test]
+fn ls_json_says_when_no_berthd_is_running() {
+    let doc = berth_ls_json(berthd::scratch_endpoint("ls-json-absent").as_os_str());
+    assert_eq!(doc["berthd_running"], false);
+    assert_eq!(doc["sessions"].as_array().map(Vec::len), Some(0));
 }

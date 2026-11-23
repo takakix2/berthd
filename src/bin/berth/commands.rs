@@ -168,7 +168,54 @@ pub(crate) async fn cmd_info() -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) async fn cmd_ls() -> Result<(), String> {
+/// `berth ls` の引数。`--json` だけを受け付ける（知らない語は黙って捨てずに断る）。
+fn parse_ls_args(args: &[String]) -> Result<bool, String> {
+    let mut json = false;
+    for a in args {
+        match a.as_str() {
+            "--json" => json = true,
+            other => return Err(format!("berth: ls: unknown argument `{other}`\n\n{USAGE}")),
+        }
+    }
+    Ok(json)
+}
+
+/// `berth ls --json` の 1 行。機械が読む形なので、表の見た目（幅・印）とは切り離す。
+///
+/// `berthd_running` は「berthd が居ない」と「居るがセッションが 0」を分けるための欄。
+/// `program_status` は名乗っていなければ `null`（欄を落とさない ＝ `peek --json` と同じ）。
+fn ls_json(running: bool, sessions: &[SessionInfo]) -> serde_json::Value {
+    let rows: Vec<serde_json::Value> = sessions
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "id": s.id,
+                "name": s.name,
+                "shell": s.shell,
+                "cwd": s.cwd,
+                "cwd_src": s.cwd_src,
+                "alive": s.alive,
+                "cols": s.cols,
+                "rows": s.rows,
+                "program_status": s.program_status,
+            })
+        })
+        .collect();
+    serde_json::json!({ "berthd_running": running, "sessions": rows })
+}
+
+pub(crate) async fn cmd_ls(args: &[String]) -> Result<(), String> {
+    let json = parse_ls_args(args)?;
+    if json {
+        // `list()` は berthd が居ないと空を返すので、居るかどうかはここで直に見る。
+        let (running, sessions) = match request(&Control::List).await? {
+            None => (false, Vec::new()),
+            Some(Control::Sessions { sessions }) => (true, sessions),
+            Some(other) => return Err(format!("berth: unexpected reply to list: {other:?}")),
+        };
+        say!("{}", ls_json(running, &sessions));
+        return Ok(());
+    }
     let sessions = list().await?;
     if sessions.is_empty() {
         say!("no berthd sessions");
@@ -732,6 +779,55 @@ mod tests {
         assert!(p(&argv(&["w1", "--ctrl-c", "x"]), None).is_err());
         assert!(p(&argv(&["w1", "--no-enter"]), None).is_err());
         assert!(p(&argv(&[]), None).is_err());
+    }
+
+    #[test]
+    fn ls_takes_only_json() {
+        use super::parse_ls_args;
+        assert_eq!(parse_ls_args(&argv(&[])), Ok(false));
+        assert_eq!(parse_ls_args(&argv(&["--json"])), Ok(true));
+        assert!(parse_ls_args(&argv(&["--jsno"])).is_err());
+        assert!(parse_ls_args(&argv(&["main"])).is_err());
+    }
+
+    #[test]
+    fn ls_json_keeps_the_fields_a_script_reads() {
+        use super::ls_json;
+        use berth_protocol::{ProgramStatus, SessionInfo};
+        let s = |id: &str, st: Option<ProgramStatus>| SessionInfo {
+            id: id.into(),
+            name: format!("n-{id}"),
+            shell: "bash".into(),
+            cwd: "/w".into(),
+            cwd_src: "proc".into(),
+            alive: true,
+            cols: 80,
+            rows: 24,
+            program_status: st,
+        };
+        let blocked = ProgramStatus {
+            state: "blocked".into(),
+            kind: Some("permission".into()),
+            app: Some("codex".into()),
+            age_ms: 7_000,
+            ..ProgramStatus::default()
+        };
+        let v = ls_json(true, &[s("a", Some(blocked)), s("b", None)]);
+        assert_eq!(v["berthd_running"], true);
+        let rows = v["sessions"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0]["name"], "n-a");
+        assert_eq!(rows[0]["alive"], true);
+        assert_eq!(rows[0]["program_status"]["state"], "blocked");
+        assert_eq!(rows[0]["program_status"]["kind"], "permission");
+        assert_eq!(rows[0]["program_status"]["age_ms"], 7_000);
+        // 名乗っていない物は欄ごと落とさず null（「欄が無い」と「名乗っていない」を混ぜない）。
+        assert!(rows[1].as_object().unwrap().contains_key("program_status"));
+        assert!(rows[1]["program_status"].is_null());
+        // berthd が居なければ、空の一覧と「居ない」を分けて言う。
+        let none = ls_json(false, &[]);
+        assert_eq!(none["berthd_running"], false);
+        assert_eq!(none["sessions"].as_array().unwrap().len(), 0);
     }
 
     #[test]
