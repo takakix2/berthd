@@ -765,6 +765,120 @@ mod tests {
         );
     }
 
+    /// 名前だけのシェルは client の `PATH` で絶対パスに直す（#72）。
+    ///
+    /// 注意: 検体のパスは [`abs`] で組む。`/usr/bin` は Windows では絶対パスではない
+    /// （`is_absolute` は drive を要る）ので、直書きすると Windows でだけ落ちる。
+    #[test]
+    fn a_bare_shell_name_is_resolved_on_the_clients_path() {
+        use super::resolve_bare_name;
+        use std::path::Path;
+        let none: Vec<String> = Vec::new();
+        let local = abs("home/u/.local/bin");
+        let usr = abs("usr/bin");
+        let path = vec![local.clone(), usr.clone()];
+        let at = |list: Vec<std::path::PathBuf>| move |p: &Path| list.iter().any(|x| x == p);
+        let s = |p: std::path::PathBuf| p.to_str().unwrap().to_string();
+
+        // ① PATH の先にある方で当たる。
+        assert_eq!(
+            resolve_bare_name(
+                Face::Unix,
+                "hsh",
+                &path,
+                &none,
+                &at(vec![local.join("hsh"), usr.join("hsh")])
+            ),
+            s(local.join("hsh"))
+        );
+        // ② 起こせない物（無い・実行できない）は飛ばして次のディレクトリへ。
+        assert_eq!(
+            resolve_bare_name(Face::Unix, "hsh", &path, &none, &at(vec![usr.join("hsh")])),
+            s(usr.join("hsh"))
+        );
+        // ③ 見つからなければ名前のまま（デーモンの PATH に任せる・直す前と同じ）。
+        assert_eq!(
+            resolve_bare_name(Face::Unix, "hsh", &path, &none, &at(vec![])),
+            "hsh"
+        );
+        // ④ 区切りを含む値は、書いた人が場所を言っている。触らない。
+        let everything = |_: &Path| true;
+        for v in ["/bin/sh", "./hsh", "bin/hsh"] {
+            assert_eq!(
+                resolve_bare_name(Face::Unix, v, &path, &none, &everything),
+                v
+            );
+        }
+        // ⑤ 絶対でない PATH の項目は飛ばす（client の cwd 基準の綴りは、デーモンでは別の場所）。
+        let relative = vec![
+            std::path::PathBuf::from("."),
+            std::path::PathBuf::from("bin"),
+        ];
+        assert_eq!(
+            resolve_bare_name(Face::Unix, "hsh", &relative, &none, &everything),
+            "hsh"
+        );
+        // ⑥ 空は空のまま。
+        assert_eq!(
+            resolve_bare_name(Face::Unix, "", &path, &none, &everything),
+            ""
+        );
+    }
+
+    /// Windows の面: 名前そのまま → `PATHEXT` の順（portable-pty の `search_path` と同じ）。
+    /// Linux の上でも検体にできる（見ているのは探す順番）。
+    #[test]
+    fn a_bare_shell_name_on_windows_tries_pathext() {
+        use super::resolve_bare_name;
+        use std::path::Path;
+        let ps7 = abs("w/ps7");
+        let sys32 = abs("w/sys32");
+        let path = vec![ps7.clone(), sys32.clone()];
+        let ext = vec![".COM".to_string(), ".EXE".to_string()];
+        let at = |list: Vec<std::path::PathBuf>| move |p: &Path| list.iter().any(|x| x == p);
+        let s = |p: std::path::PathBuf| p.to_str().unwrap().to_string();
+        // 拡張子を補って当たる。
+        assert_eq!(
+            resolve_bare_name(
+                Face::Windows,
+                "pwsh",
+                &path,
+                &ext,
+                &at(vec![ps7.join("pwsh.EXE")])
+            ),
+            s(ps7.join("pwsh.EXE"))
+        );
+        // 名前そのままが在ればそれ（拡張子を補うより先）。
+        assert_eq!(
+            resolve_bare_name(
+                Face::Windows,
+                "powershell.exe",
+                &path,
+                &ext,
+                &at(vec![sys32.join("powershell.exe")])
+            ),
+            s(sys32.join("powershell.exe"))
+        );
+        // `\` も区切り。触らない。
+        let everything = |_: &Path| true;
+        assert_eq!(
+            resolve_bare_name(Face::Windows, r"C:\hsh\hsh.exe", &path, &ext, &everything),
+            r"C:\hsh\hsh.exe"
+        );
+        // unix の面では `\` は区切りではない（名前の一部）ので、探しに行く。
+        assert_ne!(
+            resolve_bare_name(Face::Unix, r"a\b", &path, &ext, &everything),
+            r"a\b"
+        );
+    }
+
+    /// その面で絶対になるパス（unix は `/` の下・Windows は `C:\` の下）。
+    fn abs(rel: &str) -> std::path::PathBuf {
+        let root = if cfg!(windows) { r"C:\" } else { "/" };
+        rel.split('/')
+            .fold(std::path::PathBuf::from(root), |p, c| p.join(c))
+    }
+
     /// daemon 側の解決。ここに親の観測は入らない（berthd の親は
     /// 「最初に起こした人」であって、いま頼んできた人ではない。
     #[test]

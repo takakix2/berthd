@@ -292,11 +292,110 @@ pub fn passwd_shell() -> Option<String> {
     }
 }
 
+/// 名前だけのシェル（`hsh`・`pwsh` など）を、client の `PATH` で絶対パスに直す（純粋）。
+///
+/// 名前のまま渡すと、berthd は**デーモン自身の** `PATH` で探す（`CommandBuilder` の `search_path`）。
+/// デーモンの環境は起こされた時のままなので、ログイン前に起きた berthd（linger の user service）には
+/// `~/.local/bin` が無く、打った人の `which` では引ける物が `not found in PATH` になる。
+/// ∴ 打った人が見ている `PATH` で決めてから名指しする。
+///
+/// 探し方は `CommandBuilder::search_path` に揃える（違うのは、どの `PATH` を使うかだけ）:
+/// - unix: `PATH` の各ディレクトリで、名前そのまま。
+/// - Windows: 各ディレクトリで、名前そのまま → `PATHEXT` の拡張子を当てた物（`with_extension`）。
+///
+/// 触らない物: 区切り（unix は `/`・Windows は `/` と `\`）を含む値。絶対パスと `./hsh` のような
+/// 相対パスは、書いた人がその場所を言っている。`PATH` のうち絶対でないディレクトリも飛ばす
+/// （client の cwd を基準にした綴りは、cwd の違うデーモンでは別の場所を指す）。
+///
+/// 見つからなければ名前のまま返す（直す前の動きと同じ。デーモンの `PATH` に在れば起きる）。
+///
+/// 注意: 設定ファイルの `[env]` で `PATH` を書き換えていても、ここで見るのは client の `PATH`。
+/// 直す前は、デーモンがその書き換えた `PATH` で探していた。
+#[must_use]
+pub fn resolve_bare_name(
+    face: Face,
+    name: &str,
+    path_dirs: &[std::path::PathBuf],
+    pathext: &[String],
+    is_exec: &dyn Fn(&std::path::Path) -> bool,
+) -> String {
+    let has_separator = match face {
+        Face::Unix => name.contains('/'),
+        Face::Windows => name.contains(['/', '\\']),
+    };
+    if name.is_empty() || has_separator {
+        return name.to_string();
+    }
+    let as_string = |p: std::path::PathBuf| p.to_str().map(ToString::to_string);
+    for dir in path_dirs.iter().filter(|d| d.is_absolute()) {
+        let candidate = dir.join(name);
+        if is_exec(&candidate) {
+            if let Some(s) = as_string(candidate) {
+                return s;
+            }
+        }
+        if face == Face::Windows {
+            for ext in pathext {
+                let ext = ext.trim().trim_start_matches('.');
+                if ext.is_empty() {
+                    continue;
+                }
+                let candidate = dir.join(name).with_extension(ext);
+                if is_exec(&candidate) {
+                    if let Some(s) = as_string(candidate) {
+                        return s;
+                    }
+                }
+            }
+        }
+    }
+    name.to_string()
+}
+
+/// [`resolve_bare_name`] を、いま走っている面と、この process の `PATH` / `PATHEXT` で撃つ。
+#[must_use]
+pub fn resolve_bare_name_here(name: &str) -> String {
+    let path_dirs: Vec<std::path::PathBuf> = std::env::var_os("PATH")
+        .map(|p| std::env::split_paths(&p).collect())
+        .unwrap_or_default();
+    // portable-pty と同じく、`PATHEXT` が無ければ `.EXE` だけ。
+    let pathext: Vec<String> = std::env::var("PATHEXT")
+        .unwrap_or_else(|_| ".EXE".to_string())
+        .split(';')
+        .map(ToString::to_string)
+        .collect();
+    resolve_bare_name(
+        Face::here(),
+        name,
+        &path_dirs,
+        &pathext,
+        &is_executable_file,
+    )
+}
+
+/// 起こせるファイルか（unix は実行ビットまで見る・Windows はファイルであること）。
+fn is_executable_file(p: &std::path::Path) -> bool {
+    let Ok(m) = std::fs::metadata(p) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        m.is_file() && m.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        m.is_file()
+    }
+}
+
 /// CLI オプション付きで client 側のシェルを解決する。
 ///
 /// `cli_shell` は `--shell` / `-s` で渡された値。`None` なら CLI 指定なしとして
 /// 次の優先順位（`BERTHD_SHELL` → 設定ファイル → 親プロセス → `$SHELL`）へ落ちる。
 /// `config_shell` は `~/.berth/config.toml` の `default-shell`（読むのは呼び手）。
+///
+/// 名前だけの値は client の `PATH` で絶対パスに直す（[`resolve_bare_name`]）。出所は変えない。
 #[must_use]
 pub fn client_shell_with(
     cli_shell: Option<&str>,
@@ -311,6 +410,7 @@ pub fn client_shell_with(
         &login_shells(),
         std::env::var("SHELL").ok().as_deref(),
     )
+    .map(|(shell, src)| (resolve_bare_name_here(&shell), src))
 }
 
 /// `berth` が `Control::Spawn` に載せる値と出所。`None` は何も言わないことを意味する。

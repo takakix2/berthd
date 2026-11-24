@@ -245,7 +245,7 @@ default-shell = "hsh"
 CLAUDE_CODE_SHELL = "~/.local/libexec/hsh-as-bash/bash"
 ```
 
-- `default-shell`: Precedes parent shell detection, but yields to explicit CLI flags (`-s`) and `BERTHD_SHELL` (recorded as `client:config` in the journal).
+- `default-shell`: Precedes parent shell detection, but yields to explicit CLI flags (`-s`) and `BERTHD_SHELL` (recorded as `client:config` in the journal). A bare name such as `hsh` is looked up on the `PATH` of the terminal where you type `berth`, not the daemon's, so a daemon started before login still finds `~/.local/bin/hsh`.
 - `[env]`: Injects environment variables exclusively during session initialization (not applied during subsequent reattaches). Leading `~` or `~/` is expanded to the user's home directory (`$VAR` interpolation is not supported).
 - **Error Handling**: Syntax errors or unknown keys in the configuration file produce a warning on stderr and fallback to default behavior (path and load status can be inspected with `berth info`).
 

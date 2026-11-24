@@ -8,7 +8,7 @@ members = ["crates/berth-protocol", "crates/berth-screen"]
 
 [package]
 name = "berthd"
-version = "0.6.10"
+version = "0.6.11"
 edition = "2021"
 # ISC（tmux と同じ）。client と server を持つ多重化ツールという同じ棚なので、相手を tmux に取った。
 license = "ISC"
